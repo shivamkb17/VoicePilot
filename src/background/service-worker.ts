@@ -205,21 +205,75 @@ async function handleSpeechResult(
           actionResult = "SUGGEST: What would you like me to search for?";
         }
         break;
+
+      case "fill_form":
+        if (intent.target) {
+          try {
+            // Target format: "fieldname|value"
+            const parts = intent.target.split("|");
+            const field = parts[0]?.trim() || "";
+            const value = parts[1]?.trim() || "";
+            if (field && value) {
+              const fillRes = await chrome.tabs.sendMessage(tabId, {
+                type: MSG.FILL_FORM,
+                field,
+                value,
+              });
+              actionResult = fillRes.result;
+            } else {
+              actionResult = "SUGGEST: Please specify the field name and value. For example, 'fill name with John'.";
+            }
+          } catch (e) {
+            actionResult = "Could not fill the form field.";
+          }
+        }
+        break;
+
+      case "submit_form":
+        try {
+          const submitRes = await chrome.tabs.sendMessage(tabId, {
+            type: MSG.SUBMIT_FORM,
+          });
+          actionResult = submitRes.result;
+        } catch (e) {
+          actionResult = "Could not submit the form.";
+        }
+        break;
+
+      case "send_message":
+        if (intent.target) {
+          try {
+            const msgRes = await chrome.tabs.sendMessage(tabId, {
+              type: MSG.SEND_MESSAGE,
+              text: intent.target,
+            });
+            actionResult = msgRes.result;
+          } catch (e) {
+            actionResult = "Could not send the message.";
+          }
+        } else {
+          actionResult = "SUGGEST: What message would you like me to send?";
+        }
+        break;
     }
   }
 
-  // Step 4.5: Pause any playing page media before responding
-  // This prevents page audio from overlapping with VoicePilot's TTS
+  // Step 4.5: LOCK page media before responding
+  // Monkey-patches HTMLMediaElement.play() to block ALL page audio during TTS
+  // This fixes the auto-play loop bug (e.g., on ElevenLabs website)
   if (tabId) {
     try {
-      await chrome.tabs.sendMessage(tabId, { type: MSG.PAUSE_MEDIA });
+      await chrome.tabs.sendMessage(tabId, { type: MSG.LOCK_MEDIA });
     } catch (e) {
       // Content script might not be ready
     }
   }
 
   // Step 5: For simple actions (without suggestions), return directly
-  const simpleActions: IntentType[] = ["scroll", "go_back", "go_forward", "go_home", "play_media", "search"];
+  const simpleActions: IntentType[] = [
+    "scroll", "go_back", "go_forward", "go_home",
+    "play_media", "search", "fill_form", "submit_form", "send_message",
+  ];
   if (simpleActions.includes(intent.type) && actionResult) {
     return {
       aiResponse: actionResult,

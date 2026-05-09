@@ -16,6 +16,11 @@ import {
   resumePageMedia,
   playMedia,
   searchOnPage,
+  lockPageMedia,
+  unlockPageMedia,
+  fillFormField,
+  submitCurrentForm,
+  sendMessage,
 } from "./navigator";
 
 console.log("[VoicePilot] Content script loaded on:", window.location.href);
@@ -155,6 +160,36 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       return false;
     }
 
+    case MSG.LOCK_MEDIA: {
+      const result = lockPageMedia();
+      sendResponse({ result });
+      return false;
+    }
+
+    case MSG.UNLOCK_MEDIA: {
+      const result = unlockPageMedia();
+      sendResponse({ result });
+      return false;
+    }
+
+    case MSG.FILL_FORM: {
+      const result = fillFormField(message.field || "", message.value || "");
+      sendResponse({ result });
+      return false;
+    }
+
+    case MSG.SUBMIT_FORM: {
+      const result = submitCurrentForm();
+      sendResponse({ result });
+      return false;
+    }
+
+    case MSG.SEND_MESSAGE: {
+      const result = sendMessage(message.text || "");
+      sendResponse({ result });
+      return false;
+    }
+
     case MSG.UPDATE_STATE: {
       // Forward state update to overlay iframe
       overlayIframe?.contentWindow?.postMessage(
@@ -179,6 +214,12 @@ window.addEventListener("message", (event) => {
   // Handle resize requests from overlay
   if (event.data.type === "voicepilot:resize") {
     applyIframeStyle(event.data.expanded === true);
+    return;
+  }
+
+  // Handle media unlock from overlay (after TTS finishes)
+  if (event.data.type === "voicepilot:unlock_media") {
+    unlockPageMedia();
     return;
   }
 

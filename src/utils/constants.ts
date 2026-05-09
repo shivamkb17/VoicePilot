@@ -23,9 +23,16 @@ export const MSG = {
   PAUSE_MEDIA: "voicepilot:pause_media",
   RESUME_MEDIA: "voicepilot:resume_media",
   PLAY_MEDIA: "voicepilot:play_media",
+  LOCK_MEDIA: "voicepilot:lock_media",
+  UNLOCK_MEDIA: "voicepilot:unlock_media",
 
   // Search
   SEARCH: "voicepilot:search",
+
+  // Form interactions
+  FILL_FORM: "voicepilot:fill_form",
+  SUBMIT_FORM: "voicepilot:submit_form",
+  SEND_MESSAGE: "voicepilot:send_message",
 
   // State
   UPDATE_STATE: "voicepilot:update_state",
@@ -77,7 +84,10 @@ export type IntentType =
   | "go_forward"
   | "go_home"
   | "play_media"
-  | "search";
+  | "search"
+  | "fill_form"
+  | "submit_form"
+  | "send_message";
 
 export interface Intent {
   type: IntentType;

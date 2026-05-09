@@ -649,3 +649,353 @@ export function searchOnPage(query: string): string {
 
   return `SUGGEST: I couldn't find a search box on this page. You might want to try navigating to a page that has search functionality.`;
 }
+
+// ── Media Lock (prevents auto-play during TTS) ──
+
+let originalPlay: typeof HTMLMediaElement.prototype.play | null = null;
+let isMediaLocked = false;
+
+/**
+ * Lock ALL page media by monkey-patching HTMLMediaElement.prototype.play.
+ * This prevents ANY audio/video from starting while VoicePilot is speaking.
+ * This is the nuclear option to fix the auto-play loop bug.
+ */
+export function lockPageMedia(): string {
+  if (isMediaLocked) return "Media already locked.";
+
+  // First, pause everything that's currently playing
+  pauseAllPageMedia();
+
+  // Monkey-patch play() to prevent future plays
+  originalPlay = HTMLMediaElement.prototype.play;
+  HTMLMediaElement.prototype.play = function (this: HTMLMediaElement) {
+    // Check if this is a VoicePilot audio element (in the iframe)
+    // Page elements should be blocked, but VoicePilot's own audio plays in iframe
+    // so this only affects the main page context
+    console.log("[VoicePilot] Blocked page audio from playing during TTS.");
+    return Promise.resolve();
+  };
+
+  isMediaLocked = true;
+  console.log("[VoicePilot] Media lock engaged — page audio blocked.");
+  return "Media locked.";
+}
+
+/**
+ * Unlock page media — restore normal play() behavior.
+ */
+export function unlockPageMedia(): string {
+  if (!isMediaLocked || !originalPlay) return "Media not locked.";
+
+  HTMLMediaElement.prototype.play = originalPlay;
+  originalPlay = null;
+  isMediaLocked = false;
+
+  console.log("[VoicePilot] Media lock released — page audio unblocked.");
+  return "Media unlocked.";
+}
+
+// ── Form Filling ───────────────────────────
+
+/**
+ * Find a form field by label/placeholder/name and fill it with a value.
+ */
+export function fillFormField(fieldName: string, value: string): string {
+  if (!fieldName || !value) {
+    return "SUGGEST: Please specify both the field name and value. For example, say 'fill name with John'.";
+  }
+
+  const normalizedField = fieldName.toLowerCase().trim();
+
+  // Strategy 1: Find by <label> text
+  const labels = document.querySelectorAll("label");
+  for (const label of labels) {
+    const labelText = label.textContent?.toLowerCase().trim() || "";
+    if (labelText.includes(normalizedField) || normalizedField.includes(labelText)) {
+      const forId = label.getAttribute("for");
+      let input: HTMLInputElement | HTMLTextAreaElement | null = null;
+
+      if (forId) {
+        input = document.getElementById(forId) as HTMLInputElement | null;
+      }
+      if (!input) {
+        input = label.querySelector("input, textarea, select") as HTMLInputElement | null;
+      }
+
+      if (input) {
+        return setInputValue(input, value, labelText);
+      }
+    }
+  }
+
+  // Strategy 2: Find by placeholder text
+  const allInputs = document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+    'input:not([type="hidden"]):not([type="submit"]):not([type="button"]), textarea'
+  );
+  for (const input of allInputs) {
+    const placeholder = (input.getAttribute("placeholder") || "").toLowerCase();
+    const name = (input.getAttribute("name") || "").toLowerCase();
+    const ariaLabel = (input.getAttribute("aria-label") || "").toLowerCase();
+    const id = (input.id || "").toLowerCase();
+
+    if (
+      placeholder.includes(normalizedField) ||
+      name.includes(normalizedField) ||
+      ariaLabel.includes(normalizedField) ||
+      id.includes(normalizedField) ||
+      normalizedField.includes(placeholder) ||
+      normalizedField.includes(name)
+    ) {
+      return setInputValue(input, value, placeholder || name || id);
+    }
+  }
+
+  // Strategy 3: Fuzzy match by common field names
+  const fieldAliases: Record<string, string[]> = {
+    name: ["name", "full name", "your name", "fullname", "first name", "firstname"],
+    email: ["email", "e-mail", "email address", "your email"],
+    phone: ["phone", "tel", "telephone", "mobile", "phone number"],
+    password: ["password", "pass", "passwd"],
+    message: ["message", "comment", "feedback", "your message", "description", "body", "text"],
+    subject: ["subject", "title", "topic"],
+    address: ["address", "street", "location"],
+    city: ["city", "town"],
+    company: ["company", "organization", "org"],
+  };
+
+  for (const [key, aliases] of Object.entries(fieldAliases)) {
+    if (aliases.some((a) => normalizedField.includes(a) || a.includes(normalizedField))) {
+      // Try to find input matching this key
+      for (const input of allInputs) {
+        const inputName = (input.getAttribute("name") || "").toLowerCase();
+        const inputType = (input.getAttribute("type") || "").toLowerCase();
+        const inputId = (input.id || "").toLowerCase();
+        const inputPlaceholder = (input.getAttribute("placeholder") || "").toLowerCase();
+
+        if (
+          inputName.includes(key) || inputId.includes(key) ||
+          inputPlaceholder.includes(key) || inputType === key
+        ) {
+          return setInputValue(input, value, key);
+        }
+      }
+    }
+  }
+
+  // List available fields
+  const availableFields: string[] = [];
+  allInputs.forEach((input) => {
+    const label = input.getAttribute("placeholder") ||
+      input.getAttribute("aria-label") ||
+      input.getAttribute("name") ||
+      input.id || "";
+    if (label && label.length < 50) availableFields.push(label);
+  });
+
+  if (availableFields.length > 0) {
+    return `SUGGEST: I couldn't find a "${fieldName}" field. Available fields: ${availableFields.join(", ")}.`;
+  }
+  return `SUGGEST: I couldn't find any form fields on this page.`;
+}
+
+/**
+ * Set value on an input element with proper event dispatching
+ */
+function setInputValue(
+  input: HTMLInputElement | HTMLTextAreaElement,
+  value: string,
+  fieldLabel: string
+): string {
+  input.focus();
+
+  // Use native input setter to work with React/Vue
+  const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+    window.HTMLInputElement.prototype, "value"
+  )?.set;
+  const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(
+    window.HTMLTextAreaElement.prototype, "value"
+  )?.set;
+
+  if (input.tagName === "TEXTAREA" && nativeTextAreaValueSetter) {
+    nativeTextAreaValueSetter.call(input, value);
+  } else if (nativeInputValueSetter) {
+    nativeInputValueSetter.call(input, value);
+  } else {
+    input.value = value;
+  }
+
+  // Fire all necessary events for framework compatibility
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+  input.dispatchEvent(new Event("blur", { bubbles: true }));
+
+  highlightElement(input);
+  return `Filled "${fieldLabel}" with "${value}".`;
+}
+
+/**
+ * Submit the current/visible form
+ */
+export function submitCurrentForm(): string {
+  // Try the focused element's form first
+  const activeEl = document.activeElement;
+  if (activeEl) {
+    const form = activeEl.closest("form");
+    if (form) {
+      highlightElement(form);
+      setTimeout(() => {
+        form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        try { form.submit(); } catch (e) { /* handled by event */ }
+      }, 400);
+      return "Submitting the form.";
+    }
+  }
+
+  // Find submit buttons
+  const submitBtns = document.querySelectorAll<HTMLElement>(
+    'button[type="submit"], input[type="submit"], button:not([type])'
+  );
+
+  for (const btn of submitBtns) {
+    // Check if it's visible
+    const rect = btn.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      highlightElement(btn);
+      setTimeout(() => btn.click(), 400);
+      const label = btn.textContent?.trim() || "Submit";
+      return `Clicking "${label}" to submit.`;
+    }
+  }
+
+  // Find any visible form and submit it
+  const forms = document.querySelectorAll("form");
+  for (const form of forms) {
+    const rect = form.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      try { form.submit(); } catch (e) { /* handled */ }
+      return "Submitting the form.";
+    }
+  }
+
+  return "SUGGEST: I couldn't find a form to submit on this page.";
+}
+
+// ── Message Sending ────────────────────────
+
+/**
+ * Find a message/chat input and send a message.
+ * Works with chat UIs, contact forms, comment boxes, etc.
+ */
+export function sendMessage(text: string): string {
+  if (!text || text.trim().length === 0) {
+    return "SUGGEST: What message would you like me to send?";
+  }
+
+  // Strategy 1: Find chat/message input areas
+  const messageSelectors = [
+    // Chat apps (Slack, Discord, WhatsApp Web, etc.)
+    '[contenteditable="true"][role="textbox"]',
+    '[contenteditable="true"][aria-label*="message" i]',
+    '[contenteditable="true"][data-placeholder*="message" i]',
+    '[contenteditable="true"]',
+    // Standard message inputs
+    'textarea[name*="message" i]',
+    'textarea[placeholder*="message" i]',
+    'textarea[placeholder*="type" i]',
+    'textarea[aria-label*="message" i]',
+    'textarea[name*="comment" i]',
+    'textarea[placeholder*="comment" i]',
+    'textarea[name*="body" i]',
+    'textarea[name*="text" i]',
+    // Generic textareas (last resort)
+    'textarea',
+    // Input fields for messages
+    'input[name*="message" i]',
+    'input[placeholder*="message" i]',
+    'input[placeholder*="type" i]',
+  ];
+
+  for (const selector of messageSelectors) {
+    const el = document.querySelector<HTMLElement>(selector);
+    if (!el) continue;
+
+    // Check visibility
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) continue;
+
+    el.focus();
+
+    if (el.getAttribute("contenteditable") === "true") {
+      // ContentEditable (chat apps like Slack/Discord)
+      el.textContent = text;
+      el.innerHTML = text;
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    } else {
+      // Standard input/textarea
+      setInputValue(el as HTMLInputElement | HTMLTextAreaElement, text, "message");
+    }
+
+    highlightElement(el);
+
+    // Try to find and click the send button
+    setTimeout(() => {
+      const sendBtn = findSendButton();
+      if (sendBtn) {
+        highlightElement(sendBtn);
+        setTimeout(() => sendBtn.click(), 300);
+      } else {
+        // Try Enter key
+        el.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true })
+        );
+      }
+    }, 500);
+
+    return `Sending message: "${text.slice(0, 50)}${text.length > 50 ? "..." : ""}"`;
+  }
+
+  return `SUGGEST: I couldn't find a message input on this page.`;
+}
+
+/**
+ * Find the send/submit button for a message
+ */
+function findSendButton(): HTMLElement | null {
+  const sendSelectors = [
+    'button[aria-label*="send" i]',
+    'button[title*="send" i]',
+    'button[type="submit"]',
+    '[role="button"][aria-label*="send" i]',
+    'button:has(svg)', // Icon-only send buttons (common in chat UIs)
+  ];
+
+  for (const selector of sendSelectors) {
+    try {
+      const btn = document.querySelector<HTMLElement>(selector);
+      if (btn) {
+        const rect = btn.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) return btn;
+      }
+    } catch (e) {
+      // :has() might not be supported
+    }
+  }
+
+  // Try text-based matching
+  const buttons = document.querySelectorAll<HTMLElement>("button, [role='button']");
+  for (const btn of buttons) {
+    const text = btn.textContent?.toLowerCase().trim() || "";
+    const ariaLabel = btn.getAttribute("aria-label")?.toLowerCase() || "";
+    if (
+      text === "send" || text === "submit" || text === "post" ||
+      ariaLabel.includes("send") || ariaLabel.includes("submit")
+    ) {
+      const rect = btn.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) return btn;
+    }
+  }
+
+  return null;
+}

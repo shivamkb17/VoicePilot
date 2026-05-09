@@ -148,6 +148,43 @@ export function detectLocalIntent(text: string): Intent | null {
     }
   }
 
+  // Form filling
+  const fillPatterns = [
+    /^fill\s+(?:the\s+)?(.+?)\s+(?:with|as|to)\s+(.+)/i,
+    /^(?:type|enter|put|write|set)\s+(.+?)\s+(?:in|into|in the|for)\s+(?:the\s+)?(.+)/i,
+    /^(?:my|the)\s+(.+?)\s+is\s+(.+)/i,
+  ];
+  for (const pattern of fillPatterns) {
+    const match = lower.match(pattern);
+    if (match?.[1] && match?.[2]) {
+      // For "type X in Y" pattern, field/value are swapped
+      if (pattern === fillPatterns[1]) {
+        return { type: "fill_form", target: `${match[2].trim()}|${match[1].trim()}`, rawText: text };
+      }
+      return { type: "fill_form", target: `${match[1].trim()}|${match[2].trim()}`, rawText: text };
+    }
+  }
+
+  // Submit form
+  if (matchesAny(lower, ["submit", "submit form", "submit the form", "send form", "send the form"])) {
+    return { type: "submit_form", rawText: text };
+  }
+
+  // Send message
+  const sendPatterns = [
+    /^send\s+(?:a\s+)?message\s+(?:saying\s+|that says\s+)?(.+)/i,
+    /^send\s+(.+)/i,
+    /^message\s+(?:them|him|her)?\s*(.+)/i,
+    /^tell\s+(?:them|him|her)\s+(.+)/i,
+    /^write\s+(?:a\s+)?message\s+(.+)/i,
+  ];
+  for (const pattern of sendPatterns) {
+    const match = lower.match(pattern);
+    if (match?.[1]) {
+      return { type: "send_message", target: match[1].trim(), rawText: text };
+    }
+  }
+
   // Search
   const searchPatterns = [
     /^search\s+(?:for\s+)?(.+)/i,
@@ -163,6 +200,31 @@ export function detectLocalIntent(text: string): Intent | null {
   }
 
   // No local match — let AI handle it
+  return null;
+}
+
+/**
+ * Parse fill_form commands to extract field name and value.
+ * Returns { field, value } or null.
+ */
+export function parseFillCommand(text: string): { field: string; value: string } | null {
+  const patterns = [
+    /fill\s+(?:the\s+)?(.+?)\s+(?:with|as|to)\s+(.+)/i,
+    /(?:type|enter|put|write|set)\s+(.+?)\s+(?:in|into|in the|for)\s+(?:the\s+)?(.+)/i,
+    /(?:my|the)\s+(.+?)\s+is\s+(.+)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) {
+      // For pattern 2, field and value are swapped
+      if (pattern === patterns[1]) {
+        return { field: match[2].trim(), value: match[1].trim() };
+      }
+      return { field: match[1].trim(), value: match[2].trim() };
+    }
+  }
+
   return null;
 }
 
@@ -184,6 +246,9 @@ Classify the user's speech into one of these intents:
 - go_home: User wants to go to the homepage
 - play_media: User wants to play audio/video/music (extract target if specific)
 - search: User wants to search for something (extract the search query as target)
+- fill_form: User wants to fill a form field (extract "fieldname|value" as target)
+- submit_form: User wants to submit a form
+- send_message: User wants to send a message (extract message text as target)
 - general_question: User is asking a general question about the page content
 
 User said: "${userText}"

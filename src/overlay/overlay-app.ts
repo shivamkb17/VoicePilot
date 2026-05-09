@@ -500,6 +500,12 @@ async function speakResponse(text: string) {
     } catch (e) { /* silent */ }
   }
 
+  // Unlock page media after TTS finishes
+  // This restores HTMLMediaElement.play() to normal
+  try {
+    window.parent.postMessage({ type: "voicepilot:unlock_media" }, "*");
+  } catch (e) { /* ignore */ }
+
   isProcessingCommand = false;
   restartListening();
 }
