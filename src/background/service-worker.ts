@@ -177,11 +177,49 @@ async function handleSpeechResult(
           actionResult = "Could not navigate to the homepage.";
         }
         break;
+
+      case "play_media":
+        try {
+          const playRes = await chrome.tabs.sendMessage(tabId, {
+            type: MSG.PLAY_MEDIA,
+            target: intent.target || "",
+          });
+          actionResult = playRes.result;
+        } catch (e) {
+          actionResult = "Could not play media.";
+        }
+        break;
+
+      case "search":
+        if (intent.target) {
+          try {
+            const searchRes = await chrome.tabs.sendMessage(tabId, {
+              type: MSG.SEARCH,
+              query: intent.target,
+            });
+            actionResult = searchRes.result;
+          } catch (e) {
+            actionResult = "Could not perform the search.";
+          }
+        } else {
+          actionResult = "SUGGEST: What would you like me to search for?";
+        }
+        break;
+    }
+  }
+
+  // Step 4.5: Pause any playing page media before responding
+  // This prevents page audio from overlapping with VoicePilot's TTS
+  if (tabId) {
+    try {
+      await chrome.tabs.sendMessage(tabId, { type: MSG.PAUSE_MEDIA });
+    } catch (e) {
+      // Content script might not be ready
     }
   }
 
   // Step 5: For simple actions (without suggestions), return directly
-  const simpleActions: IntentType[] = ["scroll", "go_back", "go_forward", "go_home"];
+  const simpleActions: IntentType[] = ["scroll", "go_back", "go_forward", "go_home", "play_media", "search"];
   if (simpleActions.includes(intent.type) && actionResult) {
     return {
       aiResponse: actionResult,

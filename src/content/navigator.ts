@@ -419,3 +419,233 @@ export function goHome(): string {
 
   return "You're already on the homepage.";
 }
+
+// ── Media Control ──────────────────────────
+
+// Track which elements we paused so we can resume only those
+let pausedMediaElements: HTMLMediaElement[] = [];
+
+/**
+ * Pause ALL audio/video elements on the page.
+ * Called before VoicePilot speaks to prevent interference.
+ */
+export function pauseAllPageMedia(): string {
+  pausedMediaElements = [];
+
+  const mediaElements = document.querySelectorAll<HTMLMediaElement>("audio, video");
+  let count = 0;
+
+  mediaElements.forEach((el) => {
+    if (!el.paused) {
+      el.pause();
+      pausedMediaElements.push(el);
+      count++;
+    }
+  });
+
+  // Also handle iframes with YouTube/embedded players
+  const iframes = document.querySelectorAll("iframe");
+  iframes.forEach((iframe) => {
+    try {
+      // Send postMessage to pause YouTube/Vimeo embeds
+      iframe.contentWindow?.postMessage(
+        JSON.stringify({ event: "command", func: "pauseVideo" }),
+        "*"
+      );
+      iframe.contentWindow?.postMessage(
+        JSON.stringify({ method: "pause" }),
+        "*"
+      );
+    } catch (e) {
+      // Cross-origin — can't control
+    }
+  });
+
+  if (count > 0) {
+    console.log(`[VoicePilot] Paused ${count} media element(s).`);
+    return `Paused ${count} audio/video element(s).`;
+  }
+  return "No media playing.";
+}
+
+/**
+ * Resume media that was paused by pauseAllPageMedia.
+ */
+export function resumePageMedia(): string {
+  let count = 0;
+
+  pausedMediaElements.forEach((el) => {
+    try {
+      if (el.paused && document.contains(el)) {
+        el.play().catch(() => {});
+        count++;
+      }
+    } catch (e) {
+      // Element may have been removed
+    }
+  });
+
+  pausedMediaElements = [];
+
+  if (count > 0) return `Resumed ${count} media element(s).`;
+  return "No media to resume.";
+}
+
+/**
+ * Find and play a media element matching the target.
+ * Handles: audio elements, video elements, play buttons.
+ */
+export function playMedia(target?: string): string {
+  // Strategy 1: Find audio/video elements
+  const mediaElements = document.querySelectorAll<HTMLMediaElement>("audio, video");
+
+  if (target) {
+    // Try to match by nearby text, title, or aria-label
+    for (const el of mediaElements) {
+      const context = (
+        el.getAttribute("title") ||
+        el.getAttribute("aria-label") ||
+        el.closest("[class]")?.textContent ||
+        ""
+      ).toLowerCase();
+
+      if (context.includes(target.toLowerCase())) {
+        el.play().catch(() => {});
+        highlightElement(el);
+        return `Playing "${target}".`;
+      }
+    }
+  }
+
+  // Strategy 2: Play the first paused media element
+  for (const el of mediaElements) {
+    if (el.paused && el.src) {
+      el.play().catch(() => {});
+      highlightElement(el);
+      const label = el.getAttribute("title") || "media";
+      return `Playing ${label}.`;
+    }
+  }
+
+  // Strategy 3: Find and click a play button
+  const playButtons = document.querySelectorAll<HTMLElement>(
+    'button[aria-label*="play" i], button[title*="play" i], [role="button"][aria-label*="play" i], .play-button, [class*="play-btn"], [class*="play_btn"]'
+  );
+
+  if (playButtons.length > 0) {
+    const btn = playButtons[0];
+    highlightElement(btn);
+    setTimeout(() => btn.click(), 400);
+    return "Clicking the play button.";
+  }
+
+  return "SUGGEST: I couldn't find any audio or video to play on this page.";
+}
+
+// ── Search ─────────────────────────────────
+
+/**
+ * Find the search input on the page, type the query, and submit.
+ */
+export function searchOnPage(query: string): string {
+  if (!query || query.trim().length === 0) {
+    return "SUGGEST: What would you like me to search for?";
+  }
+
+  // Strategy 1: Find search input directly
+  const searchSelectors = [
+    'input[type="search"]',
+    'input[name="q"]',
+    'input[name="query"]',
+    'input[name="search"]',
+    'input[name="s"]',
+    'input[placeholder*="search" i]',
+    'input[placeholder*="Search" i]',
+    'input[aria-label*="search" i]',
+    'input[aria-label*="Search" i]',
+    '[role="search"] input',
+    '[role="searchbox"]',
+    'form[action*="search"] input[type="text"]',
+    'form[action*="search"] input:not([type="hidden"])',
+  ];
+
+  for (const selector of searchSelectors) {
+    const input = document.querySelector<HTMLInputElement>(selector);
+    if (input) {
+      // Focus and fill the search input
+      input.focus();
+      input.value = query;
+
+      // Dispatch input events to trigger React/Vue/Angular bindings
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+
+      highlightElement(input);
+
+      // Submit the form after a brief delay
+      setTimeout(() => {
+        const form = input.closest("form");
+        if (form) {
+          form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+          // If the submit event isn't prevented, submit the form
+          try { form.submit(); } catch (e) { /* handled by event */ }
+        } else {
+          // Try pressing Enter
+          input.dispatchEvent(
+            new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true })
+          );
+          input.dispatchEvent(
+            new KeyboardEvent("keypress", { key: "Enter", code: "Enter", bubbles: true })
+          );
+          input.dispatchEvent(
+            new KeyboardEvent("keyup", { key: "Enter", code: "Enter", bubbles: true })
+          );
+        }
+      }, 600);
+
+      return `Searching for "${query}".`;
+    }
+  }
+
+  // Strategy 2: Click a search icon/button to open search overlay
+  const searchButtons = document.querySelectorAll<HTMLElement>(
+    'button[aria-label*="search" i], a[aria-label*="search" i], [class*="search-icon"], [class*="search-btn"], [class*="search_icon"]'
+  );
+
+  if (searchButtons.length > 0) {
+    const btn = searchButtons[0];
+    highlightElement(btn);
+    btn.click();
+
+    // Wait for search overlay to open, then fill
+    setTimeout(() => {
+      for (const selector of searchSelectors) {
+        const input = document.querySelector<HTMLInputElement>(selector);
+        if (input) {
+          input.focus();
+          input.value = query;
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+
+          setTimeout(() => {
+            const form = input.closest("form");
+            if (form) {
+              form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+              try { form.submit(); } catch (e) { /* handled */ }
+            } else {
+              input.dispatchEvent(
+                new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true })
+              );
+            }
+          }, 400);
+
+          break;
+        }
+      }
+    }, 800);
+
+    return `Opening search and looking for "${query}".`;
+  }
+
+  return `SUGGEST: I couldn't find a search box on this page. You might want to try navigating to a page that has search functionality.`;
+}

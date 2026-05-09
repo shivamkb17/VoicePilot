@@ -12,6 +12,10 @@ import {
   goBack,
   goForward,
   goHome,
+  pauseAllPageMedia,
+  resumePageMedia,
+  playMedia,
+  searchOnPage,
 } from "./navigator";
 
 console.log("[VoicePilot] Content script loaded on:", window.location.href);
@@ -123,6 +127,30 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
     case "voicepilot:go_home": {
       const result = goHome();
+      sendResponse({ result });
+      return false;
+    }
+
+    case MSG.PAUSE_MEDIA: {
+      const result = pauseAllPageMedia();
+      sendResponse({ result });
+      return false;
+    }
+
+    case MSG.RESUME_MEDIA: {
+      const result = resumePageMedia();
+      sendResponse({ result });
+      return false;
+    }
+
+    case MSG.PLAY_MEDIA: {
+      const result = playMedia(message.target);
+      sendResponse({ result });
+      return false;
+    }
+
+    case MSG.SEARCH: {
+      const result = searchOnPage(message.query || "");
       sendResponse({ result });
       return false;
     }

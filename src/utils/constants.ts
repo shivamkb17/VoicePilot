@@ -19,6 +19,14 @@ export const MSG = {
   SCROLL: "voicepilot:scroll",
   CLICK_ELEMENT: "voicepilot:click_element",
 
+  // Media control
+  PAUSE_MEDIA: "voicepilot:pause_media",
+  RESUME_MEDIA: "voicepilot:resume_media",
+  PLAY_MEDIA: "voicepilot:play_media",
+
+  // Search
+  SEARCH: "voicepilot:search",
+
   // State
   UPDATE_STATE: "voicepilot:update_state",
   GET_STATE: "voicepilot:get_state",
@@ -67,7 +75,9 @@ export type IntentType =
   | "general_question"
   | "go_back"
   | "go_forward"
-  | "go_home";
+  | "go_home"
+  | "play_media"
+  | "search";
 
 export interface Intent {
   type: IntentType;
