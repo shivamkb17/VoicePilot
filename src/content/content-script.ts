@@ -1,0 +1,152 @@
+// ─────────────────────────────────────────────
+// VoicePilot — Content Script Entry Point
+// Injects the floating overlay and handles messages
+// ─────────────────────────────────────────────
+
+import { MSG } from "../utils/constants";
+import { extractPageContext } from "./dom-extractor";
+import {
+  scrollPage,
+  navigateToSection,
+  clickElement,
+  goBack,
+  goForward,
+} from "./navigator";
+
+console.log("[VoicePilot] Content script loaded on:", window.location.href);
+
+// ── Overlay Injection ─────────────────────────
+
+let overlayIframe: HTMLIFrameElement | null = null;
+let isExpanded = false;
+
+function injectOverlay() {
+  if (overlayIframe) return;
+
+  overlayIframe = document.createElement("iframe");
+  overlayIframe.id = "voicepilot-overlay";
+  overlayIframe.src = chrome.runtime.getURL("overlay/overlay.html");
+
+  // Start SMALL (just the orb) — NO pointer-events: none
+  // The iframe is small enough that it doesn't block page interaction
+  applyIframeStyle(false);
+
+  // Allow microphone access inside the iframe
+  overlayIframe.setAttribute("allow", "microphone *");
+
+  document.body.appendChild(overlayIframe);
+  console.log("[VoicePilot] Overlay injected.");
+}
+
+function applyIframeStyle(expanded: boolean) {
+  if (!overlayIframe) return;
+  isExpanded = expanded;
+
+  if (expanded) {
+    overlayIframe.setAttribute(
+      "style",
+      [
+        "position: fixed",
+        "bottom: 20px",
+        "right: 20px",
+        "width: 400px",
+        "height: 480px",
+        "border: none",
+        "z-index: 2147483647",
+        "background: transparent",
+        "transition: width 0.3s cubic-bezier(0.4,0,0.2,1), height 0.3s cubic-bezier(0.4,0,0.2,1)",
+        "color-scheme: only light", // Prevent dark mode override
+      ].join(";")
+    );
+  } else {
+    overlayIframe.setAttribute(
+      "style",
+      [
+        "position: fixed",
+        "bottom: 20px",
+        "right: 20px",
+        "width: 100px",
+        "height: 100px",
+        "border: none",
+        "z-index: 2147483647",
+        "background: transparent",
+        "transition: width 0.3s cubic-bezier(0.4,0,0.2,1), height 0.3s cubic-bezier(0.4,0,0.2,1)",
+        "color-scheme: only light",
+      ].join(";")
+    );
+  }
+}
+
+// Inject on load
+injectOverlay();
+
+// ── Message Handling ─────────────────────────
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  switch (message.type) {
+    case MSG.GET_PAGE_CONTEXT: {
+      const context = extractPageContext();
+      sendResponse(context);
+      return false;
+    }
+
+    case MSG.SCROLL: {
+      const result = scrollPage(message.direction || "down");
+      sendResponse({ result });
+      return false;
+    }
+
+    case MSG.NAVIGATE: {
+      const result = navigateToSection(message.target || "");
+      sendResponse({ result });
+      return false;
+    }
+
+    case MSG.CLICK_ELEMENT: {
+      const result = clickElement(message.target || "");
+      sendResponse({ result });
+      return false;
+    }
+
+    case "voicepilot:go_back": {
+      const result = goBack();
+      sendResponse({ result });
+      return false;
+    }
+
+    case "voicepilot:go_forward": {
+      const result = goForward();
+      sendResponse({ result });
+      return false;
+    }
+
+    case MSG.UPDATE_STATE: {
+      // Forward state update to overlay iframe
+      overlayIframe?.contentWindow?.postMessage(
+        { type: "voicepilot:state_update", ...message },
+        "*"
+      );
+      sendResponse({ ok: true });
+      return false;
+    }
+
+    default:
+      return false;
+  }
+});
+
+// Listen for messages FROM the overlay iframe
+window.addEventListener("message", (event) => {
+  // Only accept messages from our overlay iframe
+  if (event.source !== overlayIframe?.contentWindow) return;
+  if (!event.data?.type?.startsWith("voicepilot:")) return;
+
+  // Handle resize requests from overlay
+  if (event.data.type === "voicepilot:resize") {
+    applyIframeStyle(event.data.expanded === true);
+    return;
+  }
+
+  // Forward everything else to background service worker
+  chrome.runtime.sendMessage(event.data);
+});

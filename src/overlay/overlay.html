@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VoicePilot Overlay</title>
+  <link rel="stylesheet" href="../styles/overlay.css" />
+</head>
+<body>
+  <div class="voicepilot-container" id="voicepilot-root">
+    <div class="transcript-panel" id="transcript-panel">
+      <div class="transcript-header">
+        <span class="dot"></span>
+        <span>VoicePilot</span>
+      </div>
+      <div class="transcript-messages" id="transcript-messages"></div>
+    </div>
+    <div class="orb-wrapper" id="orb-wrapper">
+      <div class="orb-status-label" id="orb-status-label">Click to start</div>
+      <div class="voice-orb" id="voice-orb" data-state="idle" role="button" tabindex="0" aria-label="VoicePilot voice control">
+        <div class="pulse-rings">
+          <div class="pulse-ring"></div>
+          <div class="pulse-ring"></div>
+          <div class="pulse-ring"></div>
+        </div>
+        <div class="orb-sphere" id="orb-sphere">
+          <div class="orb-icon" id="orb-icon-mic">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+              <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+            </svg>
+          </div>
+          <div class="waveform" id="orb-waveform" style="display: none;">
+            <div class="waveform-bar"></div>
+            <div class="waveform-bar"></div>
+            <div class="waveform-bar"></div>
+            <div class="waveform-bar"></div>
+            <div class="waveform-bar"></div>
+          </div>
+          <div class="orb-icon" id="orb-icon-processing" style="display: none;">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="animation: spin-gradient 1.5s linear infinite;">
+              <circle cx="12" cy="12" r="10" fill="none" stroke="white" stroke-width="2" stroke-dasharray="31.4 31.4" stroke-linecap="round"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="./overlay-app.ts"></script>
+</body>
+</html>

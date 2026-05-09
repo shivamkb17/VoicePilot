@@ -1,0 +1,477 @@
+/* ─────────────────────────────────────────────
+   VoicePilot — Overlay Styles
+   Premium glassmorphism dark-mode UI
+   ───────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  /* ── Color Palette ───────────────────────── */
+  --vp-bg-dark: #0a0a14;
+  --vp-bg-glass: rgba(15, 15, 30, 0.82);
+  --vp-bg-glass-light: rgba(25, 25, 50, 0.65);
+  --vp-border-glass: rgba(255, 255, 255, 0.06);
+  --vp-border-glow: rgba(99, 102, 241, 0.3);
+
+  /* Glow colors per state */
+  --vp-glow-idle: rgba(99, 102, 241, 0.15);
+  --vp-glow-listening: rgba(139, 92, 246, 0.5);
+  --vp-glow-processing: rgba(245, 158, 11, 0.4);
+  --vp-glow-speaking: rgba(34, 211, 238, 0.45);
+  --vp-glow-error: rgba(239, 68, 68, 0.5);
+
+  /* Accent gradients */
+  --vp-gradient-idle: linear-gradient(135deg, #4f46e5, #7c3aed);
+  --vp-gradient-listening: linear-gradient(135deg, #7c3aed, #a855f7);
+  --vp-gradient-processing: linear-gradient(135deg, #f59e0b, #ef4444);
+  --vp-gradient-speaking: linear-gradient(135deg, #06b6d4, #3b82f6);
+  --vp-gradient-error: linear-gradient(135deg, #ef4444, #dc2626);
+
+  /* Text */
+  --vp-text-primary: #f1f5f9;
+  --vp-text-secondary: #94a3b8;
+  --vp-text-muted: #64748b;
+  --vp-text-user: #c4b5fd;
+  --vp-text-ai: #e2e8f0;
+
+  /* Sizing */
+  --vp-orb-size: 64px;
+  --vp-radius: 20px;
+  --vp-radius-sm: 12px;
+  --vp-blur: 24px;
+
+  /* Typography */
+  --vp-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+
+  /* Transitions */
+  --vp-transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  --vp-transition-fast: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Reset ───────────────────────────────── */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--vp-font);
+  background: transparent;
+  color: var(--vp-text-primary);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Container ───────────────────────────── */
+
+.voicepilot-container {
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  width: 380px;
+  height: 420px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 16px;
+  gap: 12px;
+  pointer-events: none;
+}
+
+/* ── Transcript Panel ────────────────────── */
+
+.transcript-panel {
+  width: 100%;
+  max-height: 280px;
+  background: var(--vp-bg-glass);
+  backdrop-filter: blur(var(--vp-blur));
+  -webkit-backdrop-filter: blur(var(--vp-blur));
+  border: 1px solid var(--vp-border-glass);
+  border-radius: var(--vp-radius);
+  padding: 16px;
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateY(16px) scale(0.95);
+  transition: var(--vp-transition);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.1) transparent;
+}
+
+.transcript-panel.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.transcript-panel::-webkit-scrollbar {
+  width: 4px;
+}
+.transcript-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+.transcript-panel::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+}
+
+.transcript-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--vp-text-muted);
+}
+
+.transcript-header .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vp-glow-listening);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+.transcript-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.transcript-message {
+  font-size: 13px;
+  line-height: 1.5;
+  animation: message-in 0.3s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.transcript-message.user {
+  color: var(--vp-text-user);
+  font-weight: 500;
+}
+
+.transcript-message.user::before {
+  content: "You: ";
+  font-weight: 600;
+  opacity: 0.6;
+}
+
+.transcript-message.assistant {
+  color: var(--vp-text-ai);
+  font-weight: 400;
+}
+
+.transcript-message.assistant::before {
+  content: "";
+}
+
+.transcript-message.status {
+  color: var(--vp-text-muted);
+  font-style: italic;
+  font-size: 12px;
+}
+
+/* ── Orb Container ───────────────────────── */
+
+.orb-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  pointer-events: auto;
+}
+
+.orb-status-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--vp-text-secondary);
+  background: var(--vp-bg-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--vp-border-glass);
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(8px);
+  transition: var(--vp-transition-fast);
+}
+
+.orb-wrapper:hover .orb-status-label,
+.orb-wrapper.active .orb-status-label {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* ── Voice Orb ───────────────────────────── */
+
+.voice-orb {
+  position: relative;
+  width: var(--vp-orb-size);
+  height: var(--vp-orb-size);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: var(--vp-transition);
+  flex-shrink: 0;
+}
+
+/* Outer glow ring */
+.voice-orb::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background: var(--vp-glow-idle);
+  filter: blur(12px);
+  opacity: 0.5;
+  transition: var(--vp-transition);
+  z-index: -1;
+}
+
+/* Inner gradient sphere */
+.orb-sphere {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--vp-gradient-idle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  transition: var(--vp-transition);
+  box-shadow:
+    0 0 20px rgba(99, 102, 241, 0.3),
+    inset 0 -4px 12px rgba(0, 0, 0, 0.3),
+    inset 0 4px 12px rgba(255, 255, 255, 0.1);
+}
+
+/* Glass highlight on sphere */
+.orb-sphere::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  left: 10px;
+  width: 40%;
+  height: 30%;
+  border-radius: 50%;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.25) 0%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+
+/* ── Orb Icon ────────────────────────────── */
+
+.orb-icon {
+  width: 24px;
+  height: 24px;
+  position: relative;
+  z-index: 1;
+}
+
+.orb-icon svg {
+  width: 100%;
+  height: 100%;
+  fill: white;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+}
+
+/* ── Waveform Bars ───────────────────────── */
+
+.waveform {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 24px;
+  position: relative;
+  z-index: 1;
+}
+
+.waveform-bar {
+  width: 3px;
+  height: 8px;
+  border-radius: 2px;
+  background: white;
+  transition: height 0.1s ease;
+}
+
+/* ── Pulse Rings ─────────────────────────── */
+
+.pulse-rings {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.pulse-ring {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  opacity: 0;
+}
+
+/* ── State: Idle ─────────────────────────── */
+
+.voice-orb[data-state="idle"] .orb-sphere {
+  background: var(--vp-gradient-idle);
+  animation: breathe 4s ease-in-out infinite;
+}
+
+.voice-orb[data-state="idle"]::before {
+  background: var(--vp-glow-idle);
+}
+
+/* ── State: Listening ────────────────────── */
+
+.voice-orb[data-state="listening"] .orb-sphere {
+  background: var(--vp-gradient-listening);
+  box-shadow:
+    0 0 30px rgba(139, 92, 246, 0.5),
+    0 0 60px rgba(139, 92, 246, 0.2),
+    inset 0 -4px 12px rgba(0, 0, 0, 0.3),
+    inset 0 4px 12px rgba(255, 255, 255, 0.1);
+}
+
+.voice-orb[data-state="listening"]::before {
+  background: var(--vp-glow-listening);
+  opacity: 0.7;
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+.voice-orb[data-state="listening"] .pulse-ring:nth-child(1) {
+  color: rgba(139, 92, 246, 0.4);
+  animation: ripple 2s ease-out infinite;
+}
+
+.voice-orb[data-state="listening"] .pulse-ring:nth-child(2) {
+  color: rgba(139, 92, 246, 0.2);
+  animation: ripple 2s ease-out 0.5s infinite;
+}
+
+.voice-orb[data-state="listening"] .pulse-ring:nth-child(3) {
+  color: rgba(139, 92, 246, 0.1);
+  animation: ripple 2s ease-out 1s infinite;
+}
+
+/* ── State: Processing ───────────────────── */
+
+.voice-orb[data-state="processing"] .orb-sphere {
+  background: var(--vp-gradient-processing);
+  animation: spin-gradient 2s linear infinite;
+}
+
+.voice-orb[data-state="processing"]::before {
+  background: var(--vp-glow-processing);
+  animation: glow-pulse 1.5s ease-in-out infinite;
+}
+
+/* ── State: Speaking ─────────────────────── */
+
+.voice-orb[data-state="speaking"] .orb-sphere {
+  background: var(--vp-gradient-speaking);
+  box-shadow:
+    0 0 30px rgba(34, 211, 238, 0.4),
+    0 0 60px rgba(34, 211, 238, 0.15),
+    inset 0 -4px 12px rgba(0, 0, 0, 0.3),
+    inset 0 4px 12px rgba(255, 255, 255, 0.1);
+}
+
+.voice-orb[data-state="speaking"]::before {
+  background: var(--vp-glow-speaking);
+  opacity: 0.6;
+}
+
+/* ── State: Error ────────────────────────── */
+
+.voice-orb[data-state="error"] .orb-sphere {
+  background: var(--vp-gradient-error);
+  animation: shake 0.5s ease-in-out;
+}
+
+.voice-orb[data-state="error"]::before {
+  background: var(--vp-glow-error);
+}
+
+/* ── Hover ───────────────────────────────── */
+
+.voice-orb:hover {
+  transform: scale(1.08);
+}
+
+.voice-orb:hover .orb-sphere {
+  box-shadow:
+    0 0 40px rgba(99, 102, 241, 0.5),
+    inset 0 -4px 12px rgba(0, 0, 0, 0.3),
+    inset 0 4px 12px rgba(255, 255, 255, 0.15);
+}
+
+.voice-orb:active {
+  transform: scale(0.95);
+}
+
+/* ── Animations ──────────────────────────── */
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.15); }
+}
+
+@keyframes ripple {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+@keyframes spin-gradient {
+  0% { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.3); }
+}
+
+@keyframes message-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes waveform-dance {
+  0%, 100% { height: 6px; }
+  50% { height: 22px; }
+}

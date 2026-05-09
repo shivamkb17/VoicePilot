@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VoicePilot Settings</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="popup-container">
+    <header class="popup-header">
+      <div class="logo">
+        <div class="logo-orb"></div>
+        <h1>VoicePilot</h1>
+      </div>
+      <span class="version">v1.0.0</span>
+    </header>
+
+    <form id="settings-form" autocomplete="off">
+      <section class="settings-section">
+        <h2>API Keys</h2>
+        <p class="section-desc">Enter your API keys below. They are stored locally and never sent to third parties.</p>
+
+        <div class="field">
+          <label for="openai-key">OpenAI API Key</label>
+          <input type="password" id="openai-key" placeholder="sk-..." />
+        </div>
+
+        <div class="field">
+          <label for="elevenlabs-key">ElevenLabs API Key</label>
+          <input type="password" id="elevenlabs-key" placeholder="Your ElevenLabs key" />
+        </div>
+
+        <div class="field">
+          <label for="firecrawl-key">Firecrawl API Key</label>
+          <input type="password" id="firecrawl-key" placeholder="fc-..." />
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <h2>Configuration</h2>
+
+        <div class="field">
+          <label for="proxy-url">Cloudflare Proxy URL <span class="optional">(optional)</span></label>
+          <input type="url" id="proxy-url" placeholder="https://your-worker.workers.dev" />
+        </div>
+
+        <div class="field">
+          <label for="voice-id">ElevenLabs Voice ID</label>
+          <input type="text" id="voice-id" placeholder="21m00Tcm4TlvDq8ikWAM" />
+        </div>
+
+        <div class="field toggle-field">
+          <label for="subtitles-toggle">Show Subtitles</label>
+          <label class="toggle">
+            <input type="checkbox" id="subtitles-toggle" checked />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </section>
+
+      <button type="submit" class="save-btn" id="save-btn">
+        <span>Save Settings</span>
+      </button>
+
+      <div class="status-msg" id="status-msg"></div>
+    </form>
+  </div>
+  <script type="module" src="popup.ts"></script>
+</body>
+</html>
