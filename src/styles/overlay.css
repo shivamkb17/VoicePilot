@@ -56,7 +56,9 @@
   box-sizing: border-box;
 }
 
-body {
+html, body {
+  width: 100%;
+  height: 100%;
   font-family: var(--vp-font);
   background: transparent;
   color: var(--vp-text-primary);
@@ -65,46 +67,48 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Container ───────────────────────────── */
+/* ── Container ───────────────────────────────
+   Fills the iframe, positions content at bottom-right.
+   When iframe is small (100x100), only the orb is visible.
+   When iframe is expanded (400x480), transcript shows above.
+   ──────────────────────────────────────────── */
 
 .voicepilot-container {
-  position: fixed;
-  bottom: 0;
-  right: 0;
-  width: 380px;
-  height: 420px;
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   justify-content: flex-end;
-  padding: 16px;
+  padding: 12px;
   gap: 12px;
-  pointer-events: none;
 }
 
 /* ── Transcript Panel ────────────────────── */
 
 .transcript-panel {
   width: 100%;
-  max-height: 280px;
+  max-height: 340px;
+  min-height: 0;
   background: var(--vp-bg-glass);
   backdrop-filter: blur(var(--vp-blur));
   -webkit-backdrop-filter: blur(var(--vp-blur));
   border: 1px solid var(--vp-border-glass);
   border-radius: var(--vp-radius);
   padding: 16px;
-  pointer-events: auto;
   opacity: 0;
   transform: translateY(16px) scale(0.95);
   transition: var(--vp-transition);
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.1) transparent;
+  pointer-events: none;
 }
 
 .transcript-panel.visible {
   opacity: 1;
   transform: translateY(0) scale(1);
+  pointer-events: auto;
 }
 
 .transcript-panel::-webkit-scrollbar {
@@ -148,6 +152,7 @@ body {
   font-size: 13px;
   line-height: 1.5;
   animation: message-in 0.3s cubic-bezier(0.4, 0, 0.2, 1) both;
+  word-wrap: break-word;
 }
 
 .transcript-message.user {
@@ -167,7 +172,7 @@ body {
 }
 
 .transcript-message.assistant::before {
-  content: "";
+  content: "🤖 ";
 }
 
 .transcript-message.status {
@@ -183,7 +188,7 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  pointer-events: auto;
+  flex-shrink: 0;
 }
 
 .orb-status-label {
@@ -200,6 +205,7 @@ body {
   opacity: 0;
   transform: translateX(8px);
   transition: var(--vp-transition-fast);
+  pointer-events: none;
 }
 
 .orb-wrapper:hover .orb-status-label,
@@ -469,9 +475,4 @@ body {
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-@keyframes waveform-dance {
-  0%, 100% { height: 6px; }
-  50% { height: 22px; }
 }
