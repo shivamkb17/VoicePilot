@@ -34,6 +34,18 @@ export function detectLocalIntent(text: string): Intent | null {
     return { type: "go_forward", rawText: text };
   }
 
+  // Go home / homepage
+  if (
+    matchesAny(lower, [
+      "go home", "go to home", "homepage", "home page",
+      "main page", "go to homepage", "go to the homepage",
+      "take me home", "go to main page", "back to home",
+      "open home", "open homepage",
+    ])
+  ) {
+    return { type: "go_home", rawText: text };
+  }
+
   // Summarize page
   if (
     matchesAny(lower, [
@@ -140,6 +152,7 @@ Classify the user's speech into one of these intents:
 - describe_layout: User wants to know page structure
 - go_back: User wants to go to previous page
 - go_forward: User wants to go forward
+- go_home: User wants to go to the homepage
 - general_question: User is asking a general question about the page content
 
 User said: "${userText}"

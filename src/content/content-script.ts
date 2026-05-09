@@ -11,6 +11,7 @@ import {
   clickElement,
   goBack,
   goForward,
+  goHome,
 } from "./navigator";
 
 console.log("[VoicePilot] Content script loaded on:", window.location.href);
@@ -116,6 +117,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
     case "voicepilot:go_forward": {
       const result = goForward();
+      sendResponse({ result });
+      return false;
+    }
+
+    case "voicepilot:go_home": {
+      const result = goHome();
       sendResponse({ result });
       return false;
     }

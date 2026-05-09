@@ -48,6 +48,11 @@ export const DEFAULTS = {
   VOICE_ID: "21m00Tcm4TlvDq8ikWAM", // ElevenLabs "Rachel" voice
   ALWAYS_LISTENING: false,
   SUBTITLES_ENABLED: true,
+
+  // Default API keys for development/testing
+  OPENAI_KEY: "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",
+  ELEVENLABS_KEY: "sk_5b9b159846ae86a30b6ce38cadea604e9240517f78ffef2d",
+  FIRECRAWL_KEY: "fc-5c619b0e50944d8e8cd364494ba39e27",
 } as const;
 
 /** Intent types */
@@ -61,7 +66,8 @@ export type IntentType =
   | "describe_layout"
   | "general_question"
   | "go_back"
-  | "go_forward";
+  | "go_forward"
+  | "go_home";
 
 export interface Intent {
   type: IntentType;

@@ -1,6 +1,7 @@
 // ─────────────────────────────────────────────
 // VoicePilot — Overlay App Controller
-// Wake-word activation: "Hey Pilot" / "Hi Pilot"
+// ElevenLabs Scribe v2 STT + silence detection
+// Always-listening with 30-min wake word gate
 // ─────────────────────────────────────────────
 
 import type { OrbState } from "../utils/constants";
@@ -19,16 +20,33 @@ const waveformBars = waveformEl.querySelectorAll<HTMLElement>(".waveform-bar");
 
 // ── State ──────────────────────────────────
 let currentState: OrbState = "idle";
-let recognition: SpeechRecognition | null = null;
-let isMicActive = false; // Whether the mic session is running
-let isWakeWordMode = true; // true = passive listening for wake word
-let speechTimeout: ReturnType<typeof setTimeout> | null = null;
+let isMicActive = false;
 let waveformInterval: ReturnType<typeof setInterval> | null = null;
 let ttsAudio: HTMLAudioElement | null = null;
 let transcriptHideTimer: ReturnType<typeof setTimeout> | null = null;
+let lastActivityTime: number = Date.now();
+let isProcessingCommand = false;
 
-// Wake word patterns
-const WAKE_WORDS = ["hey pilot", "hi pilot", "hey, pilot", "hi, pilot", "a pilot", "hey pilots", "hey pylot"];
+// Audio recording state
+let mediaStream: MediaStream | null = null;
+let mediaRecorder: MediaRecorder | null = null;
+let audioChunks: Blob[] = [];
+let audioContext: AudioContext | null = null;
+let analyserNode: AnalyserNode | null = null;
+let silenceTimer: ReturnType<typeof setTimeout> | null = null;
+let volumeCheckInterval: ReturnType<typeof setInterval> | null = null;
+let isRecording = false;
+let hasSpeechStarted = false;
+
+// Config
+const INACTIVITY_THRESHOLD = 30 * 60 * 1000; // 30 min
+const SILENCE_DURATION = 1500; // 1.5s of silence = end of utterance
+const SILENCE_THRESHOLD = 15; // Volume threshold (0-255)
+const MIN_RECORDING_MS = 500; // Minimum recording length to send
+const WAKE_WORDS = [
+  "hey pilot", "hi pilot", "hey, pilot", "hi, pilot",
+  "a pilot", "hey pilots", "hey pylot",
+];
 
 // ── Initialize ─────────────────────────────
 
@@ -41,20 +59,16 @@ function init() {
     }
   });
 
-  // Listen for state updates from content script
   window.addEventListener("message", handleParentMessage);
 
-  console.log("[VoicePilot] Overlay initialized. Click orb to enable mic.");
+  console.log("[VoicePilot] Overlay initialized (ElevenLabs Scribe v2 STT).");
   setState("idle");
 }
 
 // ── Notify Parent to Resize ────────────────
 
 function requestResize(expanded: boolean) {
-  window.parent.postMessage(
-    { type: "voicepilot:resize", expanded },
-    "*"
-  );
+  window.parent.postMessage({ type: "voicepilot:resize", expanded }, "*");
 }
 
 // ── State Machine ──────────────────────────
@@ -63,7 +77,6 @@ function setState(state: OrbState) {
   currentState = state;
   voiceOrb.setAttribute("data-state", state);
 
-  // Update icon visibility
   iconMic.style.display = "none";
   iconProcessing.style.display = "none";
   waveformEl.style.display = "none";
@@ -71,15 +84,15 @@ function setState(state: OrbState) {
   switch (state) {
     case "idle":
       iconMic.style.display = "block";
-      statusLabel.textContent = isMicActive ? "" : "Click to enable mic";
+      statusLabel.textContent = "Click to enable mic";
       orbWrapper.classList.remove("active");
       stopWaveformAnimation();
       break;
 
     case "listening":
       iconMic.style.display = "block";
-      if (isWakeWordMode) {
-        statusLabel.textContent = 'Say "Hey Pilot"';
+      if (isInactive()) {
+        statusLabel.textContent = 'Say "Hey Pilot" to wake up';
       } else {
         statusLabel.textContent = "Listening...";
       }
@@ -89,7 +102,7 @@ function setState(state: OrbState) {
 
     case "processing":
       iconProcessing.style.display = "block";
-      statusLabel.textContent = "Thinking...";
+      statusLabel.textContent = "Transcribing...";
       orbWrapper.classList.add("active");
       stopWaveformAnimation();
       break;
@@ -107,265 +120,329 @@ function setState(state: OrbState) {
       orbWrapper.classList.add("active");
       stopWaveformAnimation();
       setTimeout(() => {
-        if (isMicActive) {
-          startPassiveListening();
-        } else {
-          setState("idle");
-        }
+        if (isMicActive) startListening();
+        else setState("idle");
       }, 3000);
       break;
   }
+}
+
+// ── Helpers ────────────────────────────────
+
+function isInactive(): boolean {
+  return Date.now() - lastActivityTime > INACTIVITY_THRESHOLD;
+}
+
+function markActive() {
+  lastActivityTime = Date.now();
 }
 
 // ── Orb Click Handler ──────────────────────
 
 function handleOrbClick() {
   if (currentState === "speaking") {
-    // Stop TTS and go back to passive listening
     stopSpeaking();
-    startPassiveListening();
+    startListening();
     return;
   }
 
   if (isMicActive) {
-    // Mic is active → disable it
-    stopAllListening();
+    stopAllAudio();
     isMicActive = false;
+    isProcessingCommand = false;
     setState("idle");
     hideTranscript();
     requestResize(false);
-    addMessage("Mic disabled. Click the orb to re-enable.", "status");
   } else {
-    // Mic is off → enable it and start passive listening
     isMicActive = true;
-    addMessage('Mic enabled! Say "Hey Pilot" followed by your command.', "status");
+    markActive();
+    addMessage("🎤 Mic enabled! Just speak — I'm always listening.", "status");
     showTranscript();
     requestResize(true);
-    startPassiveListening();
-
-    // Auto-collapse transcript after showing the welcome message
-    scheduleTranscriptHide(6000);
+    startListening();
+    scheduleTranscriptHide(5000);
   }
 }
 
-// ── Wake Word Detection ────────────────────
+// ── Microphone + Silence Detection ─────────
 
-/**
- * Start passive listening — continuously listens for the wake word.
- * Uses Web Speech API with continuous=true.
- */
-function startPassiveListening() {
-  stopAllListening();
-  isWakeWordMode = true;
+async function startListening() {
+  stopAllAudio();
+  isProcessingCommand = false;
   setState("listening");
 
-  const SpeechRecognition =
-    (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+  try {
+    // Get microphone access
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        sampleRate: 16000,
+      },
+    });
 
-  if (!SpeechRecognition) {
-    addMessage("Speech recognition not supported in this browser.", "status");
+    // Set up AudioContext for volume monitoring
+    audioContext = new AudioContext();
+    const source = audioContext.createMediaStreamSource(mediaStream);
+    analyserNode = audioContext.createAnalyser();
+    analyserNode.fftSize = 512;
+    source.connect(analyserNode);
+
+    // Start recording
+    startRecording();
+
+    // Start volume monitoring for silence detection
+    startVolumeMonitoring();
+
+    console.log("[VoicePilot] Mic active — listening with ElevenLabs Scribe v2.");
+  } catch (err: any) {
+    console.error("[VoicePilot] Mic access error:", err);
+    if (err.name === "NotAllowedError") {
+      addMessage("Mic access denied. Please allow microphone in browser settings.", "status");
+    } else {
+      addMessage("Could not access microphone: " + err.message, "status");
+    }
+    isMicActive = false;
     setState("error");
-    return;
   }
+}
 
-  recognition = new SpeechRecognition();
-  recognition.continuous = true;
-  recognition.interimResults = true;
-  recognition.lang = "en-US";
-  recognition.maxAlternatives = 3;
+function startRecording() {
+  if (!mediaStream) return;
 
-  recognition.onresult = (event: SpeechRecognitionEvent) => {
-    // Process only the latest results
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const result = event.results[i];
-      const transcript = result[0].transcript.toLowerCase().trim();
+  audioChunks = [];
+  hasSpeechStarted = false;
 
-      if (result.isFinal) {
-        console.log("[VoicePilot] Final transcript:", transcript);
-        const command = extractCommandAfterWakeWord(transcript);
+  // Use webm/opus for good quality + small size
+  const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+    ? "audio/webm;codecs=opus"
+    : "audio/webm";
 
-        if (command !== null) {
-          // Wake word detected!
-          if (command.length > 0) {
-            // "Hey Pilot, summarize this page" → process "summarize this page"
-            handleActivatedCommand(command);
-          } else {
-            // Just "Hey Pilot" with nothing after → switch to active listening
-            startActiveListening();
-          }
-          return;
-        }
-        // Not a wake word → ignore, keep listening
+  mediaRecorder = new MediaRecorder(mediaStream, {
+    mimeType,
+    audioBitsPerSecond: 64000,
+  });
+
+  mediaRecorder.ondataavailable = (event) => {
+    if (event.data.size > 0) {
+      audioChunks.push(event.data);
+    }
+  };
+
+  mediaRecorder.onstop = () => {
+    // Recording stopped — process the audio
+    if (audioChunks.length > 0 && hasSpeechStarted) {
+      const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+      if (audioBlob.size > 1000) {
+        // Big enough to contain speech
+        transcribeAudio(audioBlob);
       } else {
-        // Interim result — check if wake word is being spoken
-        const hasWakeWord = WAKE_WORDS.some((w) => transcript.includes(w));
-        if (hasWakeWord) {
-          // Show visual feedback that wake word is detected
-          statusLabel.textContent = "I hear you...";
+        // Too small — restart
+        if (isMicActive && !isProcessingCommand) startRecording();
+      }
+    } else {
+      // No speech detected — restart
+      if (isMicActive && !isProcessingCommand) startRecording();
+    }
+  };
+
+  mediaRecorder.start(250); // Collect in 250ms chunks
+  isRecording = true;
+}
+
+function startVolumeMonitoring() {
+  if (!analyserNode) return;
+
+  const bufferLength = analyserNode.frequencyBinCount;
+  const dataArray = new Uint8Array(bufferLength);
+  let recordingStartTime = Date.now();
+
+  volumeCheckInterval = setInterval(() => {
+    if (!analyserNode || !isRecording) return;
+
+    analyserNode.getByteFrequencyData(dataArray);
+
+    // Calculate average volume
+    let sum = 0;
+    for (let i = 0; i < bufferLength; i++) sum += dataArray[i];
+    const avgVolume = sum / bufferLength;
+
+    if (avgVolume > SILENCE_THRESHOLD) {
+      // Speech detected
+      if (!hasSpeechStarted) {
+        hasSpeechStarted = true;
+        recordingStartTime = Date.now();
+        updateInterimMessage("🎤 Hearing you...");
+        showTranscript();
+        requestResize(true);
+      }
+
+      // Reset silence timer
+      if (silenceTimer) {
+        clearTimeout(silenceTimer);
+        silenceTimer = null;
+      }
+    } else if (hasSpeechStarted) {
+      // Silence after speech — start timer
+      if (!silenceTimer) {
+        const elapsed = Date.now() - recordingStartTime;
+        if (elapsed > MIN_RECORDING_MS) {
+          silenceTimer = setTimeout(() => {
+            // Silence long enough — stop recording and transcribe
+            console.log("[VoicePilot] Silence detected, transcribing...");
+            stopRecordingForTranscription();
+          }, SILENCE_DURATION);
         }
       }
     }
-  };
+  }, 100);
+}
 
-  recognition.onend = () => {
-    // Auto-restart passive listening if mic is still active
-    if (isMicActive && isWakeWordMode) {
-      console.log("[VoicePilot] Restarting passive listening...");
-      setTimeout(() => {
-        if (isMicActive && isWakeWordMode) {
-          try {
-            recognition?.start();
-          } catch (e) {
-            // If start fails, recreate recognition
-            startPassiveListening();
-          }
-        }
-      }, 200);
-    }
-  };
+function stopRecordingForTranscription() {
+  isRecording = false;
 
-  recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-    console.warn("[VoicePilot] Recognition error:", event.error);
+  if (silenceTimer) {
+    clearTimeout(silenceTimer);
+    silenceTimer = null;
+  }
 
-    if (event.error === "not-allowed") {
-      addMessage("Microphone access denied. Please allow mic access in browser settings.", "status");
-      isMicActive = false;
-      setState("error");
-      return;
-    }
+  if (volumeCheckInterval) {
+    clearInterval(volumeCheckInterval);
+    volumeCheckInterval = null;
+  }
 
-    // For other errors, auto-restart
-    if (event.error !== "aborted" && isMicActive) {
-      setTimeout(() => {
-        if (isMicActive) startPassiveListening();
-      }, 1000);
-    }
-  };
-
-  try {
-    recognition.start();
-    console.log("[VoicePilot] Passive listening started (wake word mode).");
-  } catch (e) {
-    console.error("[VoicePilot] Failed to start recognition:", e);
-    setState("error");
+  if (mediaRecorder && mediaRecorder.state !== "inactive") {
+    mediaRecorder.stop(); // Triggers onstop → transcribeAudio
   }
 }
 
-/**
- * Extract the command after the wake word, or null if no wake word found.
- */
-function extractCommandAfterWakeWord(transcript: string): string | null {
-  const lower = transcript.toLowerCase().trim();
+// ── ElevenLabs Scribe v2 Transcription ─────
 
+async function transcribeAudio(audioBlob: Blob) {
+  if (isProcessingCommand) return;
+  isProcessingCommand = true;
+
+  removeInterimMessage();
+  updateInterimMessage("Transcribing with ElevenLabs...");
+  setState("processing");
+
+  try {
+    // Get API key
+    const settings = await chrome.runtime.sendMessage({
+      type: MSG.GET_SETTINGS,
+    });
+
+    const apiKey = settings?.elevenlabsKey;
+    if (!apiKey) {
+      addMessage("No ElevenLabs API key configured.", "status");
+      isProcessingCommand = false;
+      startListening();
+      return;
+    }
+
+    // Build form data for ElevenLabs STT
+    const formData = new FormData();
+    formData.append("file", audioBlob, "recording.webm");
+    formData.append("model_id", "scribe_v2");
+    formData.append("language_code", "en");
+    formData.append("tag_audio_events", "false");
+    formData.append("diarize", "false");
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
+
+    const response = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
+      method: "POST",
+      headers: {
+        "xi-api-key": apiKey,
+      },
+      body: formData,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`STT error ${response.status}: ${errText}`);
+    }
+
+    const result = await response.json();
+    const transcript = result.text?.trim() || "";
+
+    console.log("[VoicePilot] Scribe v2 transcript:", transcript);
+
+    if (!transcript || transcript.length < 2) {
+      removeInterimMessage();
+      isProcessingCommand = false;
+      startListening();
+      return;
+    }
+
+    removeInterimMessage();
+
+    // Check for wake word if inactive
+    if (isInactive()) {
+      const command = extractAfterWakeWord(transcript);
+      if (command !== null) {
+        markActive();
+        if (command.length > 0) {
+          await processCommand(command);
+        } else {
+          addMessage("I'm awake! What can I help you with?", "status");
+          showTranscript();
+          requestResize(true);
+          isProcessingCommand = false;
+          startListening();
+          scheduleTranscriptHide(5000);
+        }
+      } else {
+        // No wake word — ignore
+        isProcessingCommand = false;
+        startListening();
+      }
+      return;
+    }
+
+    // Normal mode — process the transcript
+    markActive();
+    await processCommand(transcript);
+  } catch (err: any) {
+    console.error("[VoicePilot] STT error:", err);
+    removeInterimMessage();
+
+    if (err.name === "AbortError") {
+      addMessage("Transcription timed out. Try again.", "status");
+    } else {
+      addMessage("Transcription error: " + err.message, "status");
+    }
+
+    isProcessingCommand = false;
+    if (isMicActive) startListening();
+  }
+}
+
+function extractAfterWakeWord(transcript: string): string | null {
+  const lower = transcript.toLowerCase().trim();
   for (const wake of WAKE_WORDS) {
     const idx = lower.indexOf(wake);
     if (idx !== -1) {
-      // Get everything after the wake word
-      const afterWake = transcript.slice(idx + wake.length).trim();
-      // Remove leading punctuation/comma
-      return afterWake.replace(/^[,.\s]+/, "").trim();
+      return transcript.slice(idx + wake.length).replace(/^[,.\s]+/, "").trim();
     }
   }
-
-  return null; // No wake word found
-}
-
-/**
- * Start active listening — the user already said "Hey Pilot" but no command.
- * Listen for the next utterance as the command.
- */
-function startActiveListening() {
-  stopAllListening();
-  isWakeWordMode = false;
-  setState("listening");
-  statusLabel.textContent = "Listening...";
-
-  // Show transcript panel
-  showTranscript();
-  requestResize(true);
-  addMessage("Yes? I'm listening...", "status");
-
-  const SpeechRecognition =
-    (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-  recognition = new SpeechRecognition();
-  recognition.continuous = false;
-  recognition.interimResults = true;
-  recognition.lang = "en-US";
-
-  let finalTranscript = "";
-
-  recognition.onresult = (event: SpeechRecognitionEvent) => {
-    finalTranscript = "";
-    let interimTranscript = "";
-
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const transcript = event.results[i][0].transcript;
-      if (event.results[i].isFinal) {
-        finalTranscript += transcript;
-      } else {
-        interimTranscript += transcript;
-      }
-    }
-
-    if (interimTranscript) {
-      updateInterimMessage(interimTranscript);
-    }
-
-    if (finalTranscript) {
-      // Clear any silence timer
-      if (speechTimeout) clearTimeout(speechTimeout);
-      speechTimeout = setTimeout(() => {
-        if (finalTranscript.trim()) {
-          handleActivatedCommand(finalTranscript.trim());
-        }
-      }, 1000);
-    }
-  };
-
-  recognition.onend = () => {
-    if (finalTranscript.trim()) {
-      handleActivatedCommand(finalTranscript.trim());
-    } else if (isMicActive) {
-      // No command spoken — go back to passive
-      addMessage("I didn't hear a command. Say \"Hey Pilot\" again when ready.", "status");
-      startPassiveListening();
-    }
-  };
-
-  recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-    if (event.error === "no-speech") {
-      addMessage('No speech detected. Say "Hey Pilot" again.', "status");
-      startPassiveListening();
-      return;
-    }
-    console.error("[VoicePilot] Active listening error:", event.error);
-    if (isMicActive) startPassiveListening();
-  };
-
-  try {
-    recognition.start();
-  } catch (e) {
-    console.error("[VoicePilot] Failed to start active listening:", e);
-    startPassiveListening();
-  }
+  return null;
 }
 
 // ── Command Processing ─────────────────────
 
-async function handleActivatedCommand(text: string) {
-  stopAllListening();
-  removeInterimMessage();
-
-  // Show transcript
+async function processCommand(text: string) {
   showTranscript();
   requestResize(true);
-
   addMessage(text, "user");
   setState("processing");
+  statusLabel.textContent = "Thinking...";
 
   try {
-    // Send to background service worker for AI processing
     const response = await chrome.runtime.sendMessage({
       type: MSG.SPEECH_RESULT,
       text,
@@ -374,18 +451,30 @@ async function handleActivatedCommand(text: string) {
     if (response?.error && !response?.aiResponse) {
       addMessage(response.error, "status");
       setState("error");
+      isProcessingCommand = false;
+      restartListening();
       return;
     }
 
     const aiText = response?.aiResponse || "I couldn't process that.";
     addMessage(aiText, "assistant");
-
-    // Speak the response
     await speakResponse(aiText);
   } catch (err) {
     console.error("[VoicePilot] Command error:", err);
     addMessage("Something went wrong. Please try again.", "status");
     setState("error");
+    isProcessingCommand = false;
+    restartListening();
+  }
+}
+
+function restartListening() {
+  if (isMicActive) {
+    setTimeout(() => {
+      isProcessingCommand = false;
+      startListening();
+      scheduleTranscriptHide(6000);
+    }, 800);
   }
 }
 
@@ -408,18 +497,11 @@ async function speakResponse(text: string) {
     console.warn("[VoicePilot] TTS error, falling back:", err);
     try {
       await speakWithBrowserTTS(text);
-    } catch (e) {
-      // Silent fallback
-    }
+    } catch (e) { /* silent */ }
   }
 
-  // After speaking, go back to passive listening
-  if (isMicActive) {
-    scheduleTranscriptHide(5000);
-    startPassiveListening();
-  } else {
-    setState("idle");
-  }
+  isProcessingCommand = false;
+  restartListening();
 }
 
 async function speakWithElevenLabs(
@@ -444,10 +526,7 @@ async function speakWithElevenLabs(
   const body: Record<string, unknown> = {
     text,
     model_id: "eleven_turbo_v2_5",
-    voice_settings: {
-      stability: 0.5,
-      similarity_boost: 0.75,
-    },
+    voice_settings: { stability: 0.5, similarity_boost: 0.75 },
   };
   if (settings.proxyUrl) body.voice_id = voiceId;
 
@@ -460,7 +539,6 @@ async function speakWithElevenLabs(
     body: JSON.stringify(body),
     signal: controller.signal,
   });
-
   clearTimeout(timeout);
 
   if (!res.ok) throw new Error(`TTS ${res.status}`);
@@ -504,19 +582,35 @@ function stopSpeaking() {
 
 // ── Cleanup ────────────────────────────────
 
-function stopAllListening() {
-  if (recognition) {
-    try {
-      recognition.abort();
-    } catch (e) {
-      // Ignore
-    }
-    recognition = null;
+function stopAllAudio() {
+  // Stop recording
+  if (mediaRecorder && mediaRecorder.state !== "inactive") {
+    try { mediaRecorder.stop(); } catch (e) { /* ignore */ }
   }
-  if (speechTimeout) {
-    clearTimeout(speechTimeout);
-    speechTimeout = null;
+  mediaRecorder = null;
+  isRecording = false;
+  hasSpeechStarted = false;
+  audioChunks = [];
+
+  // Stop timers
+  if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+  if (volumeCheckInterval) { clearInterval(volumeCheckInterval); volumeCheckInterval = null; }
+
+  // Stop mic stream
+  if (mediaStream) {
+    mediaStream.getTracks().forEach((t) => t.stop());
+    mediaStream = null;
   }
+
+  // Close audio context
+  if (audioContext && audioContext.state !== "closed") {
+    audioContext.close().catch(() => {});
+    audioContext = null;
+    analyserNode = null;
+  }
+
+  // Stop TTS
+  stopSpeaking();
 }
 
 // ── Transcript UI ──────────────────────────
@@ -532,18 +626,13 @@ function showTranscript() {
 
 function hideTranscript() {
   transcriptPanel.classList.remove("visible");
-  // Only collapse if we're in passive listening or idle
-  if (isWakeWordMode || !isMicActive) {
-    requestResize(false);
-  }
+  if (isMicActive) requestResize(false);
 }
 
 function scheduleTranscriptHide(ms: number) {
   if (transcriptHideTimer) clearTimeout(transcriptHideTimer);
   transcriptHideTimer = setTimeout(() => {
-    if (currentState === "listening" && isWakeWordMode) {
-      hideTranscript();
-    }
+    if (currentState === "listening") hideTranscript();
   }, ms);
 }
 
@@ -554,11 +643,9 @@ function addMessage(text: string, type: "user" | "assistant" | "status") {
   transcriptMessages.appendChild(el);
   transcriptPanel.scrollTop = transcriptPanel.scrollHeight;
 
-  // Keep max 20 messages
   while (transcriptMessages.children.length > 20) {
     transcriptMessages.removeChild(transcriptMessages.firstChild!);
   }
-
   showTranscript();
 }
 
@@ -575,10 +662,7 @@ function updateInterimMessage(text: string) {
 }
 
 function removeInterimMessage() {
-  if (interimEl) {
-    interimEl.remove();
-    interimEl = null;
-  }
+  if (interimEl) { interimEl.remove(); interimEl = null; }
 }
 
 // ── Waveform Animation ─────────────────────
@@ -587,33 +671,24 @@ function startWaveformAnimation() {
   stopWaveformAnimation();
   waveformInterval = setInterval(() => {
     waveformBars.forEach((bar) => {
-      const height = 6 + Math.random() * 18;
-      bar.style.height = `${height}px`;
+      bar.style.height = `${6 + Math.random() * 18}px`;
     });
   }, 120);
 }
 
 function stopWaveformAnimation() {
-  if (waveformInterval) {
-    clearInterval(waveformInterval);
-    waveformInterval = null;
-  }
-  waveformBars.forEach((bar) => {
-    bar.style.height = "8px";
-  });
+  if (waveformInterval) { clearInterval(waveformInterval); waveformInterval = null; }
+  waveformBars.forEach((bar) => { bar.style.height = "8px"; });
 }
 
 // ── Parent Message Handler ─────────────────
 
 function handleParentMessage(event: MessageEvent) {
   if (!event.data?.type?.startsWith("voicepilot:")) return;
-
-  switch (event.data.type) {
-    case "voicepilot:state_update":
-      if (event.data.state) setState(event.data.state as OrbState);
-      if (event.data.text) addMessage(event.data.text, "assistant");
-      if (event.data.userText) addMessage(event.data.userText, "user");
-      break;
+  if (event.data.type === "voicepilot:state_update") {
+    if (event.data.state) setState(event.data.state as OrbState);
+    if (event.data.text) addMessage(event.data.text, "assistant");
+    if (event.data.userText) addMessage(event.data.userText, "user");
   }
 }
 

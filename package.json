@@ -1,6 +1,6 @@
 {
   "name": "voicepilot",
-  "version": "1.0.0",
+  "version": "1.0.5",
   "description": "A conversational accessibility layer for the internet — browse websites completely through voice.",
   "type": "module",
   "scripts": {

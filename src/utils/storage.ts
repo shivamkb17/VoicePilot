@@ -29,9 +29,9 @@ export async function loadSettings(): Promise<VoicePilotSettings> {
   ]);
 
   return {
-    openaiKey: result[STORAGE_KEYS.OPENAI_KEY] || "",
-    elevenlabsKey: result[STORAGE_KEYS.ELEVENLABS_KEY] || "",
-    firecrawlKey: result[STORAGE_KEYS.FIRECRAWL_KEY] || "",
+    openaiKey: result[STORAGE_KEYS.OPENAI_KEY] || DEFAULTS.OPENAI_KEY,
+    elevenlabsKey: result[STORAGE_KEYS.ELEVENLABS_KEY] || DEFAULTS.ELEVENLABS_KEY,
+    firecrawlKey: result[STORAGE_KEYS.FIRECRAWL_KEY] || DEFAULTS.FIRECRAWL_KEY,
     proxyUrl: result[STORAGE_KEYS.PROXY_URL] || DEFAULTS.PROXY_URL,
     voiceId: result[STORAGE_KEYS.VOICE_ID] || DEFAULTS.VOICE_ID,
     alwaysListening:

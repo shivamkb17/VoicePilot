@@ -166,12 +166,36 @@ async function handleSpeechResult(
           actionResult = "Could not go forward.";
         }
         break;
+
+      case "go_home":
+        try {
+          const homeRes = await chrome.tabs.sendMessage(tabId, {
+            type: "voicepilot:go_home",
+          });
+          actionResult = homeRes.result;
+        } catch (e) {
+          actionResult = "Could not navigate to the homepage.";
+        }
+        break;
     }
   }
 
-  // Step 5: For simple actions, return the result directly
-  const simpleActions: IntentType[] = ["scroll", "go_back", "go_forward"];
+  // Step 5: For simple actions (without suggestions), return directly
+  const simpleActions: IntentType[] = ["scroll", "go_back", "go_forward", "go_home"];
   if (simpleActions.includes(intent.type) && actionResult) {
+    return {
+      aiResponse: actionResult,
+      action: intent.type,
+      actionResult,
+    };
+  }
+
+  // If navigation/click succeeded cleanly (no SUGGEST:), return directly
+  if (
+    actionResult &&
+    !actionResult.startsWith("SUGGEST:") &&
+    (intent.type === "navigate_section" || intent.type === "click_element")
+  ) {
     return {
       aiResponse: actionResult,
       action: intent.type,
