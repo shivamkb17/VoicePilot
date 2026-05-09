@@ -9,6 +9,8 @@
   Browse, understand, and navigate websites completely through voice — without touching a keyboard.
 </p>
 
+> Important for release builds: VoicePilot is designed for a bring-your-own-key model. End users must enter their own provider API keys in extension settings.
+
 <p align="center">
   <img src="https://img.shields.io/badge/Manifest-V3-blueviolet?style=flat-square" alt="Manifest V3" />
   <img src="https://img.shields.io/badge/TypeScript-5.6-blue?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
@@ -391,11 +393,20 @@ npm run dev
 
 ## 🔒 Privacy & Security
 
-- **All API keys are stored locally** in `chrome.storage.local` — never sent to third parties
-- **No telemetry or analytics** — zero data collection
-- **No external servers** — API calls go directly to OpenAI/ElevenLabs/Firecrawl (or your own proxy)
-- **Microphone is only active** when you click the Voice Orb — no passive listening
-- **Page content stays local** — DOM extraction happens in-browser, only sent to your configured AI provider
+- **Bring your own API keys** — users provide their own keys for OpenAI, ElevenLabs, and optional Firecrawl
+- **Keys are stored locally** in `chrome.storage.local` on the user's browser profile
+- **No VoicePilot backend collection** — the extension does not send user content to a developer-owned backend by default
+- **Direct provider calls** — requests go directly to OpenAI/ElevenLabs/Firecrawl, or to a user-configured proxy URL
+- **No telemetry or analytics** by default
+- **Microphone use is user-triggered** from the extension UI
+- **Page content processing is in-browser first**, with relevant extracted content sent only to configured AI providers for requested features
+
+### Compliance and Policy Documents
+
+- Privacy Policy: [`PRIVACY_POLICY.md`](PRIVACY_POLICY.md)
+- Chrome Web Store Data Disclosure Mapping: [`DATA_DISCLOSURE.md`](DATA_DISCLOSURE.md)
+- Affiliate Disclosure: [`AFFILIATE_DISCLOSURE.md`](AFFILIATE_DISCLOSURE.md)
+- Submission Checklist: [`CWS_SUBMISSION_CHECKLIST.md`](CWS_SUBMISSION_CHECKLIST.md)
 
 ---
 
