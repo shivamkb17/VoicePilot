@@ -74,16 +74,17 @@ export async function speakText(
  * Create a speech recognition instance using the Web Speech API
  * (Used as primary STT — ElevenLabs STT can be added later)
  */
-export function createSpeechRecognition(): SpeechRecognition | null {
-  const SpeechRecognition =
-    window.SpeechRecognition || window.webkitSpeechRecognition;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function createSpeechRecognition(): any {
+  const SR =
+    (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
-  if (!SpeechRecognition) {
+  if (!SR) {
     console.error("[VoicePilot] Speech recognition not supported in this browser.");
     return null;
   }
 
-  const recognition = new SpeechRecognition();
+  const recognition = new SR();
   recognition.continuous = true;
   recognition.interimResults = true;
   recognition.lang = "en-US";

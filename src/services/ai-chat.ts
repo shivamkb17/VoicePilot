@@ -47,10 +47,12 @@ export async function chatWithAI(
 ): Promise<string> {
   const url = proxyUrl
     ? `${proxyUrl}/api/chat`
-    : "https://api.openai.com/v1/chat/completions";
+    : "https://openrouter.ai/api/v1/chat/completions";
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    "HTTP-Referer": "https://voicepilot.com",
+    "X-Title": "VoicePilot",
   };
 
   if (!proxyUrl) {
@@ -63,10 +65,9 @@ export async function chatWithAI(
     method: "POST",
     headers,
     body: JSON.stringify({
-      model: "gpt-5-2025-08-07",
+      model: "openai/gpt-4o",
       messages: messages.slice(-MAX_HISTORY),
-      max_tokens: 300,
-      temperature: 0.7,
+      max_completion_tokens: 300,
     }),
   });
 
@@ -76,7 +77,29 @@ export async function chatWithAI(
   }
 
   const data = await response.json();
-  return data.choices?.[0]?.message?.content?.trim() || "I'm not sure how to respond to that.";
+  console.log("[VoicePilot] GPT-5 chat response:", JSON.stringify(data).slice(0, 500));
+
+  // GPT-5 may use different response formats
+  const content =
+    // Standard chat completions format
+    data.choices?.[0]?.message?.content?.trim() ||
+    // New responses API format
+    data.output_text?.trim() ||
+    // Output array format
+    data.output?.[0]?.content?.[0]?.text?.trim() ||
+    data.output?.[0]?.content?.trim() ||
+    data.output?.[0]?.text?.trim() ||
+    // Direct content
+    data.content?.trim() ||
+    data.text?.trim() ||
+    null;
+
+  if (!content) {
+    console.warn("[VoicePilot] Could not extract content from response. Keys:", Object.keys(data));
+    return "I received a response but couldn't parse it. Please try again.";
+  }
+
+  return content;
 }
 
 /**
@@ -89,10 +112,12 @@ export async function classifyIntent(
 ): Promise<{ type: string; target: string | null }> {
   const url = proxyUrl
     ? `${proxyUrl}/api/chat`
-    : "https://api.openai.com/v1/chat/completions";
+    : "https://openrouter.ai/api/v1/chat/completions";
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    "HTTP-Referer": "https://voicepilot.com",
+    "X-Title": "VoicePilot",
   };
 
   if (!proxyUrl) {
@@ -105,10 +130,9 @@ export async function classifyIntent(
     method: "POST",
     headers,
     body: JSON.stringify({
-      model: "gpt-5-nano-2025-08-07",
+      model: "openai/gpt-4o-mini",
       messages: [{ role: "user", content: prompt }],
-      max_tokens: 100,
-      temperature: 0,
+      max_completion_tokens: 100,
       response_format: { type: "json_object" },
     }),
   });
@@ -118,9 +142,24 @@ export async function classifyIntent(
   }
 
   const data = await response.json();
+  console.log("[VoicePilot] GPT-5 nano classify response:", JSON.stringify(data).slice(0, 500));
+
   try {
-    return JSON.parse(data.choices[0].message.content);
-  } catch {
-    return { type: "general_question", target: null };
+    // Standard chat completions format
+    const raw = data.choices?.[0]?.message?.content ||
+      data.output_text ||
+      data.output?.[0]?.content?.[0]?.text ||
+      data.output?.[0]?.content ||
+      data.output?.[0]?.text ||
+      data.content ||
+      data.text;
+
+    if (raw) {
+      const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+      return parsed;
+    }
+  } catch (e) {
+    console.warn("[VoicePilot] Intent parse error:", e);
   }
+  return { type: "general_question", target: null };
 }
