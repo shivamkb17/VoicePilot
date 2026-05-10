@@ -8,6 +8,22 @@ export const MSG = {
   START_LISTENING: "voicepilot:start_listening",
   STOP_LISTENING: "voicepilot:stop_listening",
   SPEECH_RESULT: "voicepilot:speech_result",
+  /** Content script → SW: start offscreen mic capture for sender tab */
+  MIC_START: "voicepilot:mic_start",
+  /** Content script → SW: stop offscreen mic capture for sender tab */
+  MIC_STOP: "voicepilot:mic_stop",
+  /** SW → content script → overlay: AI pipeline result for TTS + transcript UI */
+  SPEECH_OUTCOME: "voicepilot:speech_outcome",
+  /** SW → overlay: lightweight status / toast (wake word, errors that skip AI) */
+  OVERLAY_NOTIFY: "voicepilot:overlay_notify",
+  /** Offscreen recorder → SW */
+  RECORDER_EVENT: "voicepilot:recorder_event",
+  /** SW → offscreen */
+  RECORDER_START: "voicepilot:recorder_start",
+  RECORDER_STOP: "voicepilot:recorder_stop",
+  /** Overlay → SW after TTS completes; SW forwards resume to offscreen */
+  TTS_DONE: "voicepilot:tts_done",
+  RECORDER_RESUME: "voicepilot:recorder_resume",
   AI_RESPONSE: "voicepilot:ai_response",
 
   // Page understanding

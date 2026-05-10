@@ -31,6 +31,12 @@ console.log("[VoicePilot] Content script loaded on:", window.location.href);
 let overlayIframe: HTMLIFrameElement | null = null;
 let isExpanded = false;
 
+// Avoid injecting into embedded iframes (reduces duplicate UI & policy issues on sites like Facebook)
+const isMainFrame = window === window.top;
+if (!isMainFrame) {
+  console.log("[VoicePilot] Skipping overlay in subframe.");
+}
+
 function injectOverlay() {
   if (overlayIframe) return;
 
@@ -88,8 +94,10 @@ function applyIframeStyle(expanded: boolean) {
   }
 }
 
-// Inject on load
-injectOverlay();
+// Inject on load (main frame only)
+if (isMainFrame) {
+  injectOverlay();
+}
 
 // ── Message Handling ─────────────────────────
 
@@ -207,6 +215,33 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       return false;
     }
 
+    case MSG.SPEECH_OUTCOME: {
+      overlayIframe?.contentWindow?.postMessage(
+        {
+          type: "voicepilot:speech_outcome",
+          userText: message.userText,
+          aiResponse: message.aiResponse,
+          error: message.error,
+        },
+        "*"
+      );
+      sendResponse({ ok: true });
+      return false;
+    }
+
+    case MSG.OVERLAY_NOTIFY: {
+      overlayIframe?.contentWindow?.postMessage(
+        {
+          type: "voicepilot:overlay_notify",
+          text: message.text,
+          level: message.level,
+        },
+        "*"
+      );
+      sendResponse({ ok: true });
+      return false;
+    }
+
     default:
       return false;
   }
@@ -227,6 +262,20 @@ window.addEventListener("message", (event) => {
   // Handle media unlock from overlay (after TTS finishes)
   if (event.data.type === "voicepilot:unlock_media") {
     unlockPageMedia();
+    return;
+  }
+
+  // Mic / TTS bridge — must originate from content script so background gets sender.tab.id
+  if (event.data.type === "voicepilot:mic_start") {
+    chrome.runtime.sendMessage({ type: MSG.MIC_START });
+    return;
+  }
+  if (event.data.type === "voicepilot:mic_stop") {
+    chrome.runtime.sendMessage({ type: MSG.MIC_STOP });
+    return;
+  }
+  if (event.data.type === "voicepilot:tts_done") {
+    chrome.runtime.sendMessage({ type: MSG.TTS_DONE });
     return;
   }
 

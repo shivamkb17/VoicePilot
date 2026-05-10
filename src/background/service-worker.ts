@@ -8,6 +8,7 @@ import type {
   ConversationMessage,
   PageContext,
   IntentType,
+  OrbState,
 } from "../utils/constants";
 import { loadSettings } from "../utils/storage";
 import { chatWithAI, buildSystemPrompt, classifyIntent } from "../services/ai-chat";
@@ -18,6 +19,153 @@ console.log("[VoicePilot] Background service worker started.");
 // ── Conversation State ─────────────────────────
 let conversationHistory: ConversationMessage[] = [];
 let lastPageContext: PageContext | null = null;
+
+/** Tab currently owning an active mic session (forwarded to offscreen recorder). */
+let recordingTabId: number | null = null;
+
+let creatingOffscreen: Promise<void> | null = null;
+
+const OFFSCREEN_RECORDER_PAGE = "offscreen/recorder.html";
+
+async function ensureOffscreenRecorder(): Promise<void> {
+  const url = chrome.runtime.getURL(OFFSCREEN_RECORDER_PAGE);
+
+  if (typeof chrome.runtime.getContexts === "function") {
+    try {
+      const contexts = await chrome.runtime.getContexts({
+        contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
+        documentUrls: [url],
+      });
+      if (contexts.length > 0) return;
+    } catch {
+      /* ignore */
+    }
+  }
+
+  if (creatingOffscreen) {
+    await creatingOffscreen;
+    return;
+  }
+
+  creatingOffscreen = chrome.offscreen
+    .createDocument({
+      url: OFFSCREEN_RECORDER_PAGE,
+      reasons: [chrome.offscreen.Reason.USER_MEDIA],
+      justification:
+        "VoicePilot captures microphone audio for voice browsing commands.",
+    })
+    .then(() => undefined)
+    .catch((e: Error) => {
+      if (!e.message?.includes("single offscreen")) throw e;
+    })
+    .finally(() => {
+      creatingOffscreen = null;
+    });
+
+  await creatingOffscreen;
+}
+
+async function sendRecorderCommandToOffscreen(message: {
+  type:
+    | typeof MSG.RECORDER_START
+    | typeof MSG.RECORDER_STOP
+    | typeof MSG.RECORDER_RESUME;
+  tabId: number;
+}): Promise<void> {
+  await ensureOffscreenRecorder();
+  await chrome.runtime.sendMessage(message);
+}
+
+interface RecorderEventPayload {
+  type: string;
+  tabId?: number;
+  kind?: string;
+  text?: string;
+  phase?: string;
+  level?: string;
+}
+
+async function notifySpeechOutcome(
+  tabId: number,
+  userText: string,
+  aiResponse: string,
+  error?: string
+): Promise<void> {
+  try {
+    await chrome.tabs.sendMessage(tabId, {
+      type: MSG.SPEECH_OUTCOME,
+      userText,
+      aiResponse,
+      error,
+    });
+  } catch (e) {
+    console.warn("[VoicePilot] notifySpeechOutcome:", e);
+  }
+}
+
+async function handleRecorderEvent(payload: RecorderEventPayload): Promise<void> {
+  const { tabId, kind, text, phase, level } = payload;
+  if (typeof tabId !== "number" || !kind) return;
+
+  const orbStates: OrbState[] = [
+    "idle",
+    "listening",
+    "processing",
+    "speaking",
+    "error",
+  ];
+
+  try {
+    switch (kind) {
+      case "mic_ready":
+        await chrome.tabs.sendMessage(tabId, {
+          type: MSG.UPDATE_STATE,
+          state: "listening",
+        });
+        break;
+
+      case "mic_error":
+        await chrome.tabs.sendMessage(tabId, {
+          type: MSG.OVERLAY_NOTIFY,
+          text: text || "Microphone error",
+          level: "error",
+        });
+        await chrome.tabs.sendMessage(tabId, {
+          type: MSG.UPDATE_STATE,
+          state: "error",
+        });
+        break;
+
+      case "phase":
+        if (phase && orbStates.includes(phase as OrbState)) {
+          await chrome.tabs.sendMessage(tabId, {
+            type: MSG.UPDATE_STATE,
+            state: phase as OrbState,
+          });
+        }
+        break;
+
+      case "notify":
+        await chrome.tabs.sendMessage(tabId, {
+          type: MSG.OVERLAY_NOTIFY,
+          text: text || "",
+          level: level === "error" ? "error" : "status",
+        });
+        break;
+
+      case "pipeline_text":
+        if (text?.trim()) {
+          await handleSpeechResult(text.trim(), tabId);
+        }
+        break;
+
+      default:
+        break;
+    }
+  } catch (e) {
+    console.warn("[VoicePilot] handleRecorderEvent:", e);
+  }
+}
 
 // ── Message Router ─────────────────────────────
 
@@ -37,6 +185,50 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
       return true; // Async response
 
+    case MSG.MIC_START: {
+      const tabId = sender.tab?.id;
+      if (!tabId) {
+        sendResponse({ ok: false, error: "no_tab" });
+        return false;
+      }
+      recordingTabId = tabId;
+      sendRecorderCommandToOffscreen({ type: MSG.RECORDER_START, tabId })
+        .then(() => sendResponse({ ok: true }))
+        .catch((e) =>
+          sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) })
+        );
+      return true;
+    }
+
+    case MSG.MIC_STOP: {
+      const tabId = sender.tab?.id;
+      if (!tabId) {
+        sendResponse({ ok: false });
+        return false;
+      }
+      if (recordingTabId === tabId) recordingTabId = null;
+      sendRecorderCommandToOffscreen({ type: MSG.RECORDER_STOP, tabId })
+        .then(() => sendResponse({ ok: true }))
+        .catch(() => sendResponse({ ok: true }));
+      return true;
+    }
+
+    case MSG.TTS_DONE: {
+      const tabId = sender.tab?.id;
+      if (!tabId) {
+        sendResponse({ ok: false });
+        return false;
+      }
+      sendRecorderCommandToOffscreen({ type: MSG.RECORDER_RESUME, tabId })
+        .then(() => sendResponse({ ok: true }))
+        .catch(() => sendResponse({ ok: true }));
+      return true;
+    }
+
+    case MSG.RECORDER_EVENT:
+      void handleRecorderEvent(message as RecorderEventPayload);
+      return false;
+
     case MSG.GET_SETTINGS:
       loadSettings().then(sendResponse);
       return true;
@@ -52,9 +244,46 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (recordingTabId === tabId) {
+    recordingTabId = null;
+    void sendRecorderCommandToOffscreen({
+      type: MSG.RECORDER_STOP,
+      tabId,
+    }).catch(() => {});
+  }
+});
+
 // ── Core Speech Handler ─────────────────────────
 
 async function handleSpeechResult(
+  text: string,
+  tabId?: number
+): Promise<{ aiResponse: string; action?: string; actionResult?: string }> {
+  try {
+    const result = await handleSpeechResultInternal(text, tabId);
+    if (tabId !== undefined) {
+      await notifySpeechOutcome(tabId, text, result.aiResponse);
+    }
+    return result;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[VoicePilot] Speech handling error:", err);
+    if (tabId !== undefined) {
+      await notifySpeechOutcome(
+        tabId,
+        text,
+        "Sorry, I encountered an error. Please try again.",
+        msg
+      );
+    }
+    return {
+      aiResponse: "Sorry, I encountered an error. Please try again.",
+    };
+  }
+}
+
+async function handleSpeechResultInternal(
   text: string,
   tabId?: number
 ): Promise<{ aiResponse: string; action?: string; actionResult?: string }> {
@@ -346,20 +575,6 @@ async function handleSpeechResult(
   // Trim history
   if (conversationHistory.length > 40) {
     conversationHistory = conversationHistory.slice(-20);
-  }
-
-  // Step 7: Notify content script to update overlay state
-  if (tabId) {
-    try {
-      await chrome.tabs.sendMessage(tabId, {
-        type: MSG.UPDATE_STATE,
-        state: "speaking",
-        text: aiResponse,
-        userText: text,
-      });
-    } catch (e) {
-      // Tab may have closed
-    }
   }
 
   return {

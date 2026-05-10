@@ -8,7 +8,7 @@ export default defineConfig({
   plugins: [
     webExtension({
       manifest: resolve(__dirname, "src/manifest.json"),
-      additionalInputs: ["overlay/overlay.html"],
+      additionalInputs: ["overlay/overlay.html", "offscreen/recorder.html"],
     }),
   ],
   build: {
