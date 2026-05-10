@@ -181,8 +181,11 @@ export function detectLocalIntent(text: string): Intent | null {
     }
   }
 
-  // Submit form
-  if (matchesAny(lower, ["submit", "submit form", "submit the form", "send form", "send the form"])) {
+  // Submit form or Send current message
+  if (matchesAny(lower, [
+    "submit", "submit form", "submit the form", "send form", "send the form",
+    "send it", "send this", "hit enter", "press enter", "submit this"
+  ])) {
     return { type: "submit_form", rawText: text };
   }
 

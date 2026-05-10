@@ -4,6 +4,15 @@
 // and smart suggestions when no match is found
 // ─────────────────────────────────────────────
 
+// Track the last focused input (in case user clicks the mic orb and input loses focus)
+let lastFocusedInput: HTMLElement | null = null;
+document.addEventListener("focusin", (e) => {
+  const target = e.target as HTMLElement;
+  if (isEditableElement(target)) {
+    lastFocusedInput = target;
+  }
+});
+
 /**
  * Scroll the page in a direction
  */
@@ -775,10 +784,15 @@ export function typeTextIntoFocused(text: string): string {
     return typeIntoElement(activeEl as HTMLElement, text);
   }
 
-  // Strategy 2: Find the last focused input (user may have clicked away to orb)
+  // Strategy 2: Use the exact last focused input we tracked before the orb was clicked
+  if (lastFocusedInput && document.contains(lastFocusedInput)) {
+    return typeIntoElement(lastFocusedInput, text);
+  }
+
+  // Strategy 3: Find the first visible input (fallback)
   // Look for inputs/textareas that are visible and could be the target
   const editables = document.querySelectorAll<HTMLElement>(
-    'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]'
+    'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, [contenteditable]'
   );
 
   // Find the first visible one (most likely the one user wants to type in)
@@ -798,23 +812,46 @@ function isEditableElement(el: Element): boolean {
     return editableTypes.includes(el.type?.toLowerCase() || "text");
   }
   if (el instanceof HTMLTextAreaElement) return true;
-  if (el.getAttribute("contenteditable") === "true") return true;
+  if ((el as HTMLElement).isContentEditable) return true;
   return false;
 }
 
 function typeIntoElement(el: HTMLElement, text: string): string {
   el.focus();
 
-  if (el.getAttribute("contenteditable") === "true") {
-    // ContentEditable element
-    const existing = el.textContent || "";
-    el.textContent = existing ? existing + " " + text : text;
-    el.dispatchEvent(new Event("input", { bubbles: true }));
+  if (el.isContentEditable) {
+    // For rich text editors (Draft.js, ProseMirror, Lexical), we must use execCommand
+    // to simulate real user typing so their internal state updates correctly.
+    const selection = window.getSelection();
+    if (selection) {
+      // Move cursor to the end of the editable area
+      selection.selectAllChildren(el);
+      selection.collapseToEnd();
+    }
+    
+    const needsSpace = el.textContent && el.textContent.trim().length > 0;
+    const textToInsert = needsSpace ? " " + text : text;
+    
+    // Execute native typing command
+    const success = document.execCommand("insertText", false, textToInsert);
+    
+    // Fallback if execCommand is blocked
+    if (!success) {
+      const existing = el.textContent || "";
+      el.textContent = existing ? existing + " " + text : text;
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    
     highlightElement(el);
     return `Typed "${text}" into the field.`;
   }
 
   const input = el as HTMLInputElement | HTMLTextAreaElement;
+
+  // Cannot programmatically set value on file inputs
+  if (input instanceof HTMLInputElement && input.type === "file") {
+    return "SUGGEST: File uploads cannot be filled via voice command for security reasons. Please upload the file manually.";
+  }
 
   // Use native setter for React/Vue compatibility
   const nativeInputSetter = Object.getOwnPropertyDescriptor(
@@ -836,9 +873,17 @@ function typeIntoElement(el: HTMLElement, text: string): string {
     input.value = newValue;
   }
 
+  // React 16+ specific fallback (React sometimes swallows the native prototype setter)
+  const tracker = (input as any)._valueTracker;
+  if (tracker) {
+    tracker.setValue(existing); // Reset tracker so it sees the new event as a change
+  }
+
   // Fire events for framework compatibility
   input.dispatchEvent(new Event("input", { bubbles: true }));
   input.dispatchEvent(new Event("change", { bubbles: true }));
+  // Also dispatch keyboard events to trigger any keyup/keydown listeners
+  input.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, key: "Enter" }));
 
   // Move cursor to end
   try {
@@ -847,7 +892,7 @@ function typeIntoElement(el: HTMLElement, text: string): string {
 
   highlightElement(el);
   const fieldLabel = input.getAttribute("placeholder") || input.getAttribute("name") || input.id || "field";
-  return `Typed "${text}" into ${fieldLabel}.`;
+  return `Typed "${text}" into ${fieldLabel || "the field"}.`;
 }
 
 // ── Form Filling ───────────────────────────
@@ -866,7 +911,7 @@ export function fillFormField(fieldName: string, value: string): string {
   const labels = document.querySelectorAll("label");
   for (const label of labels) {
     const labelText = label.textContent?.toLowerCase().trim() || "";
-    if (labelText.includes(normalizedField) || normalizedField.includes(labelText)) {
+    if (labelText && (labelText.includes(normalizedField) || normalizedField.includes(labelText))) {
       const forId = label.getAttribute("for");
       let input: HTMLInputElement | HTMLTextAreaElement | null = null;
 
@@ -874,7 +919,7 @@ export function fillFormField(fieldName: string, value: string): string {
         input = document.getElementById(forId) as HTMLInputElement | null;
       }
       if (!input) {
-        input = label.querySelector("input, textarea, select") as HTMLInputElement | null;
+        input = label.querySelector('input:not([type="file"]), textarea, select') as HTMLInputElement | null;
       }
 
       if (input) {
@@ -885,7 +930,7 @@ export function fillFormField(fieldName: string, value: string): string {
 
   // Strategy 2: Find by placeholder text
   const allInputs = document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
-    'input:not([type="hidden"]):not([type="submit"]):not([type="button"]), textarea'
+    'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="file"]), textarea'
   );
   for (const input of allInputs) {
     const placeholder = (input.getAttribute("placeholder") || "").toLowerCase();
@@ -894,12 +939,12 @@ export function fillFormField(fieldName: string, value: string): string {
     const id = (input.id || "").toLowerCase();
 
     if (
-      placeholder.includes(normalizedField) ||
-      name.includes(normalizedField) ||
-      ariaLabel.includes(normalizedField) ||
-      id.includes(normalizedField) ||
-      normalizedField.includes(placeholder) ||
-      normalizedField.includes(name)
+      (placeholder && placeholder.includes(normalizedField)) ||
+      (name && name.includes(normalizedField)) ||
+      (ariaLabel && ariaLabel.includes(normalizedField)) ||
+      (id && id.includes(normalizedField)) ||
+      (placeholder && normalizedField.includes(placeholder)) ||
+      (name && normalizedField.includes(name))
     ) {
       return setInputValue(input, value, placeholder || name || id);
     }
@@ -961,6 +1006,10 @@ function setInputValue(
   value: string,
   fieldLabel: string
 ): string {
+  if (input instanceof HTMLInputElement && input.type === "file") {
+    return `SUGGEST: Cannot set value for file input "${fieldLabel}". Please select the file manually.`;
+  }
+
   input.focus();
 
   // Use native input setter to work with React/Vue
@@ -992,10 +1041,54 @@ function setInputValue(
  * Submit the current/visible form
  */
 export function submitCurrentForm(): string {
-  // Try the focused element's form first
-  const activeEl = document.activeElement;
-  if (activeEl) {
-    const form = activeEl.closest("form");
+  // Strategy 1: Chat Interfaces (Press Enter or click nearby Send icon)
+  let targetInput = document.activeElement as HTMLElement | null;
+  if (!targetInput || !isEditableElement(targetInput)) {
+    targetInput = lastFocusedInput;
+  }
+  
+  if (targetInput && document.contains(targetInput) && isEditableElement(targetInput)) {
+    // Look for an obvious send button near the input
+    const parent = targetInput.closest('div, form');
+    if (parent) {
+      const sendBtn = parent.querySelector<HTMLElement>(
+        'button[type="submit"], button[aria-label*="end" i], button[aria-label*="ubmit" i], button svg, [aria-label*="end message" i]'
+      );
+      if (sendBtn) {
+        const actualBtn = sendBtn.closest('button, [role="button"]') as HTMLElement || sendBtn;
+        highlightElement(actualBtn);
+        setTimeout(() => actualBtn.click(), 100);
+        return "Clicked the send button.";
+      }
+    }
+
+    // If no obvious button, perfectly simulate pressing Enter
+    targetInput.focus();
+    const enterEvent = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "Enter",
+      code: "Enter",
+      keyCode: 13,
+    });
+    targetInput.dispatchEvent(enterEvent);
+    
+    // Some frameworks listen to keyup instead
+    const keyupEvent = new KeyboardEvent("keyup", {
+      bubbles: true,
+      cancelable: true,
+      key: "Enter",
+      code: "Enter",
+      keyCode: 13,
+    });
+    targetInput.dispatchEvent(keyupEvent);
+    
+    return "Pressed Enter to send.";
+  }
+
+  // Strategy 2: Standard HTML Forms
+  if (targetInput) {
+    const form = targetInput.closest("form");
     if (form) {
       highlightElement(form);
       setTimeout(() => {
