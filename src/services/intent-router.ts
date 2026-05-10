@@ -148,7 +148,23 @@ export function detectLocalIntent(text: string): Intent | null {
     }
   }
 
-  // Form filling
+  // Type text into focused field (dictation mode)
+  // Must be checked BEFORE fill_form so "type hello" → dictation,
+  // but "type hello in name" → fill_form
+  const typeTextPatterns = [
+    /^(?:type|enter|write|put|dictate)\s+(.+)/i,
+  ];
+  for (const pattern of typeTextPatterns) {
+    const match = lower.match(pattern);
+    if (match?.[1]) {
+      const value = match[1].trim();
+      // If it contains "in/into/for [field]", it's a fill_form — skip
+      if (/\s+(?:in|into|in the|for)\s+/i.test(value)) break;
+      return { type: "type_text", target: value, rawText: text };
+    }
+  }
+
+  // Form filling (requires field name + value)
   const fillPatterns = [
     /^fill\s+(?:the\s+)?(.+?)\s+(?:with|as|to)\s+(.+)/i,
     /^(?:type|enter|put|write|set)\s+(.+?)\s+(?:in|into|in the|for)\s+(?:the\s+)?(.+)/i,
@@ -246,7 +262,8 @@ Classify the user's speech into one of these intents:
 - go_home: User wants to go to the homepage
 - play_media: User wants to play audio/video/music (extract target if specific)
 - search: User wants to search for something (extract the search query as target)
-- fill_form: User wants to fill a form field (extract "fieldname|value" as target)
+- fill_form: User wants to fill a specific form field (extract "fieldname|value" as target)
+- type_text: User wants to type/dictate text into the current input field (extract text as target)
 - submit_form: User wants to submit a form
 - send_message: User wants to send a message (extract message text as target)
 - general_question: User is asking a general question about the page content

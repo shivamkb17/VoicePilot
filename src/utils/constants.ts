@@ -33,6 +33,7 @@ export const MSG = {
   FILL_FORM: "voicepilot:fill_form",
   SUBMIT_FORM: "voicepilot:submit_form",
   SEND_MESSAGE: "voicepilot:send_message",
+  TYPE_TEXT: "voicepilot:type_text",
 
   // State
   UPDATE_STATE: "voicepilot:update_state",
@@ -87,7 +88,8 @@ export type IntentType =
   | "search"
   | "fill_form"
   | "submit_form"
-  | "send_message";
+  | "send_message"
+  | "type_text";
 
 export interface Intent {
   type: IntentType;

@@ -21,6 +21,7 @@ import {
   fillFormField,
   submitCurrentForm,
   sendMessage,
+  typeTextIntoFocused,
 } from "./navigator";
 
 console.log("[VoicePilot] Content script loaded on:", window.location.href);
@@ -186,6 +187,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
     case MSG.SEND_MESSAGE: {
       const result = sendMessage(message.text || "");
+      sendResponse({ result });
+      return false;
+    }
+
+    case MSG.TYPE_TEXT: {
+      const result = typeTextIntoFocused(message.text || "");
       sendResponse({ result });
       return false;
     }

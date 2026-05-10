@@ -758,6 +758,98 @@ export function unlockPageMedia(): string {
   return "Media unlocked.";
 }
 
+// ── Type Text (Dictation into focused field) ──
+
+/**
+ * Type text into the currently focused input field, or the first visible one.
+ * This is the "dictation mode" — user speaks and text goes into whatever field is active.
+ */
+export function typeTextIntoFocused(text: string): string {
+  if (!text || text.trim().length === 0) {
+    return "SUGGEST: What would you like me to type?";
+  }
+
+  // Strategy 1: Use the currently focused element
+  const activeEl = document.activeElement;
+  if (activeEl && isEditableElement(activeEl)) {
+    return typeIntoElement(activeEl as HTMLElement, text);
+  }
+
+  // Strategy 2: Find the last focused input (user may have clicked away to orb)
+  // Look for inputs/textareas that are visible and could be the target
+  const editables = document.querySelectorAll<HTMLElement>(
+    'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]'
+  );
+
+  // Find the first visible one (most likely the one user wants to type in)
+  for (const el of editables) {
+    const rect = el.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.top < window.innerHeight) {
+      return typeIntoElement(el, text);
+    }
+  }
+
+  return "SUGGEST: I couldn't find an input field to type into. Please click on the field first, then tell me what to type.";
+}
+
+function isEditableElement(el: Element): boolean {
+  if (el instanceof HTMLInputElement) {
+    const editableTypes = ["text", "email", "password", "search", "tel", "url", "number"];
+    return editableTypes.includes(el.type?.toLowerCase() || "text");
+  }
+  if (el instanceof HTMLTextAreaElement) return true;
+  if (el.getAttribute("contenteditable") === "true") return true;
+  return false;
+}
+
+function typeIntoElement(el: HTMLElement, text: string): string {
+  el.focus();
+
+  if (el.getAttribute("contenteditable") === "true") {
+    // ContentEditable element
+    const existing = el.textContent || "";
+    el.textContent = existing ? existing + " " + text : text;
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    highlightElement(el);
+    return `Typed "${text}" into the field.`;
+  }
+
+  const input = el as HTMLInputElement | HTMLTextAreaElement;
+
+  // Use native setter for React/Vue compatibility
+  const nativeInputSetter = Object.getOwnPropertyDescriptor(
+    window.HTMLInputElement.prototype, "value"
+  )?.set;
+  const nativeTextAreaSetter = Object.getOwnPropertyDescriptor(
+    window.HTMLTextAreaElement.prototype, "value"
+  )?.set;
+
+  // Append to existing value (don't overwrite)
+  const existing = input.value || "";
+  const newValue = existing ? existing + " " + text : text;
+
+  if (input instanceof HTMLTextAreaElement && nativeTextAreaSetter) {
+    nativeTextAreaSetter.call(input, newValue);
+  } else if (nativeInputSetter) {
+    nativeInputSetter.call(input, newValue);
+  } else {
+    input.value = newValue;
+  }
+
+  // Fire events for framework compatibility
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+
+  // Move cursor to end
+  try {
+    input.setSelectionRange(newValue.length, newValue.length);
+  } catch (e) { /* some input types don't support this */ }
+
+  highlightElement(el);
+  const fieldLabel = input.getAttribute("placeholder") || input.getAttribute("name") || input.id || "field";
+  return `Typed "${text}" into ${fieldLabel}.`;
+}
+
 // ── Form Filling ───────────────────────────
 
 /**

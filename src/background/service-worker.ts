@@ -255,6 +255,22 @@ async function handleSpeechResult(
           actionResult = "SUGGEST: What message would you like me to send?";
         }
         break;
+
+      case "type_text":
+        if (intent.target) {
+          try {
+            const typeRes = await chrome.tabs.sendMessage(tabId, {
+              type: MSG.TYPE_TEXT,
+              text: intent.target,
+            });
+            actionResult = typeRes.result;
+          } catch (e) {
+            actionResult = "Could not type the text.";
+          }
+        } else {
+          actionResult = "SUGGEST: What would you like me to type?";
+        }
+        break;
     }
   }
 
@@ -272,7 +288,7 @@ async function handleSpeechResult(
   // Step 5: For simple actions (without suggestions), return directly
   const simpleActions: IntentType[] = [
     "scroll", "go_back", "go_forward", "go_home",
-    "play_media", "search", "fill_form", "submit_form", "send_message",
+    "play_media", "search", "fill_form", "submit_form", "send_message", "type_text",
   ];
   if (simpleActions.includes(intent.type) && actionResult) {
     return {
