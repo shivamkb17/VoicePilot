@@ -1,5 +1,6 @@
 // ─────────────────────────────────────────────
 // VoicePilot — OpenAI Chat Service
+// Models: gpt-5 (rich responses) | gpt-5-nano (intent classification)
 // ─────────────────────────────────────────────
 
 import type { ConversationMessage, PageContext } from "../utils/constants";
@@ -62,7 +63,7 @@ export async function chatWithAI(
     method: "POST",
     headers,
     body: JSON.stringify({
-      model: "gpt-4o",
+      model: "gpt-5-2025-08-07",
       messages: messages.slice(-MAX_HISTORY),
       max_tokens: 300,
       temperature: 0.7,
@@ -104,7 +105,7 @@ export async function classifyIntent(
     method: "POST",
     headers,
     body: JSON.stringify({
-      model: "gpt-4o-mini",
+      model: "gpt-5-nano-2025-08-07",
       messages: [{ role: "user", content: prompt }],
       max_tokens: 100,
       temperature: 0,
