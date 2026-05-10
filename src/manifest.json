@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "VoicePilot",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "A conversational accessibility layer for the internet — browse, understand, and navigate websites completely through voice.",
   "permissions": [
     "activeTab",

@@ -164,7 +164,12 @@ function handleOrbClick() {
   }
 }
 
-// ── Microphone + Silence Detection ─────────
+// ── Microphone + Smart Speech Detection ────
+// Phase 1: Monitor volume (no recording, no API cost)
+// Phase 2: When speech detected → start MediaRecorder
+// Phase 3: When 1.5s silence → stop + send to API
+//
+// This ensures the STT API is ONLY called when the user actually speaks.
 
 async function startListening() {
   stopAllAudio();
@@ -172,29 +177,34 @@ async function startListening() {
   setState("listening");
 
   try {
-    // Get microphone access
-    mediaStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        sampleRate: 16000,
-      },
-    });
+    // Get microphone access (reuse existing stream if available)
+    if (!mediaStream || mediaStream.getTracks().some(t => t.readyState === "ended")) {
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 16000,
+        },
+      });
+    }
 
     // Set up AudioContext for volume monitoring
-    audioContext = new AudioContext();
+    if (!audioContext || audioContext.state === "closed") {
+      audioContext = new AudioContext();
+    }
+    if (audioContext.state === "suspended") {
+      await audioContext.resume();
+    }
+
     const source = audioContext.createMediaStreamSource(mediaStream);
     analyserNode = audioContext.createAnalyser();
     analyserNode.fftSize = 512;
     source.connect(analyserNode);
 
-    // Start recording
-    startRecording();
+    // Start volume monitoring ONLY (no recording yet — no API cost)
+    startVoiceDetection();
 
-    // Start volume monitoring for silence detection
-    startVolumeMonitoring();
-
-    console.log("[VoicePilot] Mic active — listening with ElevenLabs Scribe v2.");
+    console.log("[VoicePilot] Mic active — monitoring for speech (no API calls until you speak).");
   } catch (err: any) {
     console.error("[VoicePilot] Mic access error:", err);
     if (err.name === "NotAllowedError") {
@@ -207,13 +217,83 @@ async function startListening() {
   }
 }
 
+/**
+ * Phase 1: Voice Activity Detection
+ * Monitors volume WITHOUT recording. Only when real speech is detected
+ * (volume above threshold for 300ms+), it triggers startRecording().
+ */
+let speechConfirmFrames = 0;
+const SPEECH_CONFIRM_NEEDED = 3; // Need 3 consecutive frames (~300ms) above threshold
+
+function startVoiceDetection() {
+  if (!analyserNode) return;
+
+  const bufferLength = analyserNode.frequencyBinCount;
+  const dataArray = new Uint8Array(bufferLength);
+  speechConfirmFrames = 0;
+  hasSpeechStarted = false;
+  isRecording = false;
+
+  // Clear any previous interval
+  if (volumeCheckInterval) {
+    clearInterval(volumeCheckInterval);
+  }
+
+  volumeCheckInterval = setInterval(() => {
+    if (!analyserNode || isProcessingCommand) return;
+
+    analyserNode.getByteFrequencyData(dataArray);
+
+    // Calculate average volume
+    let sum = 0;
+    for (let i = 0; i < bufferLength; i++) sum += dataArray[i];
+    const avgVolume = sum / bufferLength;
+
+    if (!isRecording) {
+      // Phase 1: Waiting for speech
+      if (avgVolume > SILENCE_THRESHOLD) {
+        speechConfirmFrames++;
+        if (speechConfirmFrames >= SPEECH_CONFIRM_NEEDED) {
+          // Real speech confirmed — start recording!
+          console.log("[VoicePilot] Speech detected! Starting recording...");
+          hasSpeechStarted = true;
+          startRecording();
+          updateInterimMessage("🎤 Hearing you...");
+          showTranscript();
+          requestResize(true);
+        }
+      } else {
+        speechConfirmFrames = 0; // Reset — it was just noise
+      }
+    } else {
+      // Phase 2: Currently recording — monitor for silence
+      if (avgVolume > SILENCE_THRESHOLD) {
+        // Still speaking — reset silence timer
+        if (silenceTimer) {
+          clearTimeout(silenceTimer);
+          silenceTimer = null;
+        }
+      } else {
+        // Silence detected — start countdown
+        if (!silenceTimer) {
+          silenceTimer = setTimeout(() => {
+            console.log("[VoicePilot] Silence detected — sending to STT...");
+            stopRecordingForTranscription();
+          }, SILENCE_DURATION);
+        }
+      }
+    }
+  }, 100); // Check every 100ms
+}
+
+/**
+ * Phase 2: Start MediaRecorder when speech is confirmed.
+ */
 function startRecording() {
-  if (!mediaStream) return;
+  if (!mediaStream || isRecording) return;
 
   audioChunks = [];
-  hasSpeechStarted = false;
 
-  // Use webm/opus for good quality + small size
   const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
     ? "audio/webm;codecs=opus"
     : "audio/webm";
@@ -230,86 +310,47 @@ function startRecording() {
   };
 
   mediaRecorder.onstop = () => {
-    // Recording stopped — process the audio
-    if (audioChunks.length > 0 && hasSpeechStarted) {
+    // hasSpeechStarted is still true here — check it before resetting
+    const hadSpeech = hasSpeechStarted;
+    
+    // Now reset state for next cycle
+    hasSpeechStarted = false;
+    speechConfirmFrames = 0;
+    
+    if (audioChunks.length > 0 && hadSpeech) {
       const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
       if (audioBlob.size > 1000) {
-        // Big enough to contain speech
         transcribeAudio(audioBlob);
       } else {
-        // Too small — restart
-        if (isMicActive && !isProcessingCommand) startRecording();
+        // Too small to contain speech — go back to monitoring
+        if (isMicActive && !isProcessingCommand) {
+          startVoiceDetection();
+        }
       }
     } else {
-      // No speech detected — restart
-      if (isMicActive && !isProcessingCommand) startRecording();
+      if (isMicActive && !isProcessingCommand) {
+        startVoiceDetection();
+      }
     }
   };
 
-  mediaRecorder.start(250); // Collect in 250ms chunks
+  mediaRecorder.start(250);
   isRecording = true;
 }
 
-function startVolumeMonitoring() {
-  if (!analyserNode) return;
-
-  const bufferLength = analyserNode.frequencyBinCount;
-  const dataArray = new Uint8Array(bufferLength);
-  let recordingStartTime = Date.now();
-
-  volumeCheckInterval = setInterval(() => {
-    if (!analyserNode || !isRecording) return;
-
-    analyserNode.getByteFrequencyData(dataArray);
-
-    // Calculate average volume
-    let sum = 0;
-    for (let i = 0; i < bufferLength; i++) sum += dataArray[i];
-    const avgVolume = sum / bufferLength;
-
-    if (avgVolume > SILENCE_THRESHOLD) {
-      // Speech detected
-      if (!hasSpeechStarted) {
-        hasSpeechStarted = true;
-        recordingStartTime = Date.now();
-        updateInterimMessage("🎤 Hearing you...");
-        showTranscript();
-        requestResize(true);
-      }
-
-      // Reset silence timer
-      if (silenceTimer) {
-        clearTimeout(silenceTimer);
-        silenceTimer = null;
-      }
-    } else if (hasSpeechStarted) {
-      // Silence after speech — start timer
-      if (!silenceTimer) {
-        const elapsed = Date.now() - recordingStartTime;
-        if (elapsed > MIN_RECORDING_MS) {
-          silenceTimer = setTimeout(() => {
-            // Silence long enough — stop recording and transcribe
-            console.log("[VoicePilot] Silence detected, transcribing...");
-            stopRecordingForTranscription();
-          }, SILENCE_DURATION);
-        }
-      }
-    }
-  }, 100);
-}
-
+/**
+ * Phase 3: Stop recording and send to STT API.
+ */
 function stopRecordingForTranscription() {
   isRecording = false;
+  // NOTE: Do NOT reset hasSpeechStarted here — onstop handler needs it
 
   if (silenceTimer) {
     clearTimeout(silenceTimer);
     silenceTimer = null;
   }
 
-  if (volumeCheckInterval) {
-    clearInterval(volumeCheckInterval);
-    volumeCheckInterval = null;
-  }
+  // Don't clear volumeCheckInterval — we reuse it in startVoiceDetection after transcription
 
   if (mediaRecorder && mediaRecorder.state !== "inactive") {
     mediaRecorder.stop(); // Triggers onstop → transcribeAudio
