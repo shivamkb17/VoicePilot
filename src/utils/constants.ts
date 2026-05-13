@@ -65,6 +65,7 @@ export type OrbState = "idle" | "listening" | "processing" | "speaking" | "error
 
 /** Storage keys */
 export const STORAGE_KEYS = {
+  LLM_PROVIDER: "voicepilot_llm_provider",
   OPENAI_KEY: "voicepilot_openai_key",
   ELEVENLABS_KEY: "voicepilot_elevenlabs_key",
   FIRECRAWL_KEY: "voicepilot_firecrawl_key",
@@ -76,6 +77,7 @@ export const STORAGE_KEYS = {
 
 /** Default settings */
 export const DEFAULTS = {
+  LLM_PROVIDER: "openrouter",
   PROXY_URL: "",
   VOICE_ID: "21m00Tcm4TlvDq8ikWAM", // ElevenLabs "Rachel" voice
   ALWAYS_LISTENING: false,

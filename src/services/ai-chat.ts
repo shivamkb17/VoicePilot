@@ -43,11 +43,15 @@ CRITICAL RULES FOR VOICE RESPONSES:
 export async function chatWithAI(
   messages: ConversationMessage[],
   apiKey: string,
-  proxyUrl?: string
+  proxyUrl: string | undefined,
+  llmProvider: string = "openrouter"
 ): Promise<string> {
+  const isOpenAI = llmProvider === "openai";
   const url = proxyUrl
     ? `${proxyUrl}/api/chat`
-    : "https://openrouter.ai/api/v1/chat/completions";
+    : isOpenAI
+      ? "https://api.openai.com/v1/chat/completions"
+      : "https://openrouter.ai/api/v1/chat/completions";
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -65,7 +69,7 @@ export async function chatWithAI(
     method: "POST",
     headers,
     body: JSON.stringify({
-      model: "openai/gpt-4o",
+      model: isOpenAI ? "gpt-4o" : "openai/gpt-4o",
       messages: messages.slice(-MAX_HISTORY),
       max_completion_tokens: 300,
     }),
@@ -108,11 +112,15 @@ export async function chatWithAI(
 export async function classifyIntent(
   prompt: string,
   apiKey: string,
-  proxyUrl?: string
+  proxyUrl: string | undefined,
+  llmProvider: string = "openrouter"
 ): Promise<{ type: string; target: string | null }> {
+  const isOpenAI = llmProvider === "openai";
   const url = proxyUrl
     ? `${proxyUrl}/api/chat`
-    : "https://openrouter.ai/api/v1/chat/completions";
+    : isOpenAI
+      ? "https://api.openai.com/v1/chat/completions"
+      : "https://openrouter.ai/api/v1/chat/completions";
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -130,7 +138,7 @@ export async function classifyIntent(
     method: "POST",
     headers,
     body: JSON.stringify({
-      model: "openai/gpt-4o-mini",
+      model: isOpenAI ? "gpt-4o-mini" : "openai/gpt-4o-mini",
       messages: [{ role: "user", content: prompt }],
       max_completion_tokens: 100,
       response_format: { type: "json_object" },

@@ -320,7 +320,8 @@ async function handleSpeechResultInternal(
     const classified = await classifyIntent(
       intentPrompt,
       settings.openaiKey,
-      settings.proxyUrl || undefined
+      settings.proxyUrl || undefined,
+      settings.llmProvider
     );
     intent = {
       type: classified.type as IntentType,
@@ -563,7 +564,8 @@ async function handleSpeechResultInternal(
   const aiResponse = await chatWithAI(
     messages,
     settings.openaiKey,
-    settings.proxyUrl || undefined
+    settings.proxyUrl || undefined,
+    settings.llmProvider
   );
 
   // Save to conversation history

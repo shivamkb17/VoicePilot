@@ -5,6 +5,7 @@
 import { STORAGE_KEYS, DEFAULTS } from "./constants";
 
 export interface VoicePilotSettings {
+  llmProvider: string;
   openaiKey: string;
   elevenlabsKey: string;
   firecrawlKey: string;
@@ -19,6 +20,7 @@ export interface VoicePilotSettings {
  */
 export async function loadSettings(): Promise<VoicePilotSettings> {
   const result = await chrome.storage.local.get([
+    STORAGE_KEYS.LLM_PROVIDER,
     STORAGE_KEYS.OPENAI_KEY,
     STORAGE_KEYS.ELEVENLABS_KEY,
     STORAGE_KEYS.FIRECRAWL_KEY,
@@ -29,6 +31,7 @@ export async function loadSettings(): Promise<VoicePilotSettings> {
   ]);
 
   return {
+    llmProvider: result[STORAGE_KEYS.LLM_PROVIDER] || DEFAULTS.LLM_PROVIDER,
     openaiKey: result[STORAGE_KEYS.OPENAI_KEY] || DEFAULTS.OPENAI_KEY,
     elevenlabsKey: result[STORAGE_KEYS.ELEVENLABS_KEY] || DEFAULTS.ELEVENLABS_KEY,
     firecrawlKey: result[STORAGE_KEYS.FIRECRAWL_KEY] || DEFAULTS.FIRECRAWL_KEY,
@@ -49,6 +52,8 @@ export async function saveSettings(
 ): Promise<void> {
   const storageData: Record<string, unknown> = {};
 
+  if (settings.llmProvider !== undefined)
+    storageData[STORAGE_KEYS.LLM_PROVIDER] = settings.llmProvider;
   if (settings.openaiKey !== undefined)
     storageData[STORAGE_KEYS.OPENAI_KEY] = settings.openaiKey;
   if (settings.elevenlabsKey !== undefined)

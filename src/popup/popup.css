@@ -86,11 +86,26 @@ body {
 }
 
 .field label {
-  display: block;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
   font-size: 12px;
   font-weight: 500;
   color: #cbd5e1;
   margin-bottom: 5px;
+}
+
+.api-link {
+  font-size: 11px;
+  color: #818cf8;
+  text-decoration: none;
+  font-weight: 400;
+  transition: color 0.2s ease;
+}
+
+.api-link:hover {
+  color: #c4b5fd;
+  text-decoration: underline;
 }
 
 .optional {
@@ -100,7 +115,8 @@ body {
 
 .field input[type="text"],
 .field input[type="password"],
-.field input[type="url"] {
+.field input[type="url"],
+.field select {
   width: 100%;
   padding: 9px 12px;
   font-size: 13px;
@@ -113,7 +129,13 @@ body {
   transition: all 0.2s ease;
 }
 
-.field input:focus {
+.field select option {
+  background: #0c0c1a;
+  color: #e2e8f0;
+}
+
+.field input:focus,
+.field select:focus {
   border-color: rgba(99,102,241,0.5);
   box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
   background: rgba(255,255,255,0.06);

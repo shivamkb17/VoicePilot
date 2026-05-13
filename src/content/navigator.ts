@@ -897,9 +897,6 @@ function typeIntoElement(el: HTMLElement, text: string): string {
 
 // ── Form Filling ───────────────────────────
 
-/**
- * Find a form field by label/placeholder/name and fill it with a value.
- */
 export function fillFormField(fieldName: string, value: string): string {
   if (!fieldName || !value) {
     return "SUGGEST: Please specify both the field name and value. For example, say 'fill name with John'.";
@@ -907,94 +904,147 @@ export function fillFormField(fieldName: string, value: string): string {
 
   const normalizedField = fieldName.toLowerCase().trim();
 
-  // Strategy 1: Find by <label> text
-  const labels = document.querySelectorAll("label");
-  for (const label of labels) {
-    const labelText = label.textContent?.toLowerCase().trim() || "";
-    if (labelText && (labelText.includes(normalizedField) || normalizedField.includes(labelText))) {
-      const forId = label.getAttribute("for");
-      let input: HTMLInputElement | HTMLTextAreaElement | null = null;
-
-      if (forId) {
-        input = document.getElementById(forId) as HTMLInputElement | null;
-      }
-      if (!input) {
-        input = label.querySelector('input:not([type="file"]), textarea, select') as HTMLInputElement | null;
-      }
-
-      if (input) {
-        return setInputValue(input, value, labelText);
-      }
-    }
-  }
-
-  // Strategy 2: Find by placeholder text
-  const allInputs = document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
-    'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="file"]), textarea'
+  const allInputs = document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+    'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="file"]):not([type="radio"]):not([type="checkbox"]), textarea, select'
   );
-  for (const input of allInputs) {
-    const placeholder = (input.getAttribute("placeholder") || "").toLowerCase();
-    const name = (input.getAttribute("name") || "").toLowerCase();
-    const ariaLabel = (input.getAttribute("aria-label") || "").toLowerCase();
-    const id = (input.id || "").toLowerCase();
 
-    if (
-      (placeholder && placeholder.includes(normalizedField)) ||
-      (name && name.includes(normalizedField)) ||
-      (ariaLabel && ariaLabel.includes(normalizedField)) ||
-      (id && id.includes(normalizedField)) ||
-      (placeholder && normalizedField.includes(placeholder)) ||
-      (name && normalizedField.includes(name))
-    ) {
-      return setInputValue(input, value, placeholder || name || id);
+  const inputCandidates = Array.from(allInputs).map((input) => {
+    let labelText = "";
+
+    // 1. Check for associated <label for="...">
+    if (input.id) {
+      const labelEl = document.querySelector(`label[for="${CSS.escape(input.id)}"]`);
+      if (labelEl && labelEl.textContent) {
+        labelText = labelEl.textContent.trim();
+      }
+    }
+
+    // 2. Check for wrapping <label>
+    if (!labelText) {
+      const wrapperLabel = input.closest("label");
+      if (wrapperLabel) {
+        // Extract just the text nodes to avoid grabbing input values
+        labelText = Array.from(wrapperLabel.childNodes)
+          .filter((node) => node.nodeType === Node.TEXT_NODE)
+          .map((node) => node.textContent?.trim())
+          .join(" ")
+          .trim();
+      }
+    }
+
+    // 3. Check for aria-labelledby
+    if (!labelText) {
+      const ariaLabelledBy = input.getAttribute("aria-labelledby");
+      if (ariaLabelledBy) {
+        const labelEl = document.getElementById(ariaLabelledBy);
+        if (labelEl && labelEl.textContent) {
+          labelText = labelEl.textContent.trim();
+        }
+      }
+    }
+
+    // 4. Heuristic visual label check (DOM traversal)
+    if (!labelText) {
+      const prevSibling = input.previousSibling;
+      if (prevSibling?.nodeType === Node.TEXT_NODE && prevSibling.textContent?.trim()) {
+        labelText = prevSibling.textContent.trim();
+      } else {
+        let prevEl = input.previousElementSibling as HTMLElement;
+        if (prevEl && prevEl.textContent?.trim() && !prevEl.querySelector('input, select, textarea')) {
+          labelText = prevEl.textContent.trim();
+        } else if (input.parentElement) {
+          let parentPrev = input.parentElement.previousElementSibling as HTMLElement;
+          if (parentPrev && parentPrev.textContent?.trim() && !parentPrev.querySelector('input, select, textarea')) {
+            labelText = parentPrev.textContent.trim();
+          }
+        }
+      }
+    }
+
+    if (labelText) {
+      // Clean up whitespace and ensure it's not a giant paragraph
+      labelText = labelText.replace(/\s+/g, " ").trim();
+      if (labelText.length > 60) labelText = ""; 
+    }
+
+    // Fallbacks
+    const ariaLabel = input.getAttribute("aria-label") || "";
+    const nameAttr = input.getAttribute("name") || "";
+    const idAttr = input.id || "";
+    const placeholder = input.getAttribute("placeholder") || "";
+
+    const identifiers = [labelText, ariaLabel, nameAttr, idAttr, placeholder]
+      .filter(Boolean)
+      .map((s) => s.toLowerCase().trim());
+
+    // Prefer label, then aria-label. 
+    // Format name/id slightly if using as display name
+    const formatAttr = (str: string) => str.replace(/[-_]/g, " ").trim();
+    
+    let displayName = labelText || ariaLabel;
+    if (!displayName && nameAttr) displayName = formatAttr(nameAttr);
+    if (!displayName && idAttr) displayName = formatAttr(idAttr);
+    if (!displayName && placeholder) displayName = `Field with placeholder "${placeholder}"`;
+    if (!displayName) displayName = "unknown field";
+
+    return { input, identifiers, displayName };
+  });
+
+  // Strategy 1: Direct match against any identifier
+  for (const candidate of inputCandidates) {
+    for (const ident of candidate.identifiers) {
+      // Avoid matching very short strings unintentionally
+      if (ident.length > 2 && normalizedField.length > 2) {
+        if (ident.includes(normalizedField) || normalizedField.includes(ident)) {
+          return setInputValue(candidate.input as HTMLInputElement | HTMLTextAreaElement, value, candidate.displayName);
+        }
+      } else if (ident === normalizedField) {
+        return setInputValue(candidate.input as HTMLInputElement | HTMLTextAreaElement, value, candidate.displayName);
+      }
     }
   }
 
-  // Strategy 3: Fuzzy match by common field names
+  // Strategy 2: Fuzzy match with aliases
   const fieldAliases: Record<string, string[]> = {
-    name: ["name", "full name", "your name", "fullname", "first name", "firstname"],
-    email: ["email", "e-mail", "email address", "your email"],
-    phone: ["phone", "tel", "telephone", "mobile", "phone number"],
-    password: ["password", "pass", "passwd"],
+    name: ["name", "full name", "your name", "fullname", "first name", "firstname", "last name", "lastname"],
+    email: ["email", "e-mail", "email address", "your email", "mail"],
+    phone: ["phone", "tel", "telephone", "mobile", "phone number", "contact number"],
+    password: ["password", "pass", "passwd", "pin"],
     message: ["message", "comment", "feedback", "your message", "description", "body", "text"],
     subject: ["subject", "title", "topic"],
-    address: ["address", "street", "location"],
-    city: ["city", "town"],
-    company: ["company", "organization", "org"],
+    address: ["address", "street", "location", "delivery address", "full address", "shipping address"],
+    city: ["city", "town", "municipality"],
+    state: ["state", "province", "region"],
+    zip: ["zip", "postal code", "pincode", "pin code", "zipcode"],
+    company: ["company", "organization", "org", "business"],
   };
 
   for (const [key, aliases] of Object.entries(fieldAliases)) {
     if (aliases.some((a) => normalizedField.includes(a) || a.includes(normalizedField))) {
-      // Try to find input matching this key
-      for (const input of allInputs) {
-        const inputName = (input.getAttribute("name") || "").toLowerCase();
-        const inputType = (input.getAttribute("type") || "").toLowerCase();
-        const inputId = (input.id || "").toLowerCase();
-        const inputPlaceholder = (input.getAttribute("placeholder") || "").toLowerCase();
-
-        if (
-          inputName.includes(key) || inputId.includes(key) ||
-          inputPlaceholder.includes(key) || inputType === key
-        ) {
-          return setInputValue(input, value, key);
+      for (const candidate of inputCandidates) {
+        // If any of the candidate's identifiers match the generic key or its aliases
+        const matchFound = candidate.identifiers.some((ident) => 
+          ident.includes(key) || aliases.some((alias) => ident.includes(alias))
+        );
+        
+        if (matchFound) {
+          return setInputValue(candidate.input as HTMLInputElement | HTMLTextAreaElement, value, candidate.displayName);
         }
       }
     }
   }
 
-  // List available fields
-  const availableFields: string[] = [];
-  allInputs.forEach((input) => {
-    const label = input.getAttribute("placeholder") ||
-      input.getAttribute("aria-label") ||
-      input.getAttribute("name") ||
-      input.id || "";
-    if (label && label.length < 50) availableFields.push(label);
-  });
+  // List available fields cleanly
+  const availableFields = inputCandidates
+    .map((c) => c.displayName)
+    .filter((name) => name.length > 0 && name.length < 50 && name !== "unknown field");
 
-  if (availableFields.length > 0) {
-    return `SUGGEST: I couldn't find a "${fieldName}" field. Available fields: ${availableFields.join(", ")}.`;
+  const uniqueAvailableFields = Array.from(new Set(availableFields));
+
+  if (uniqueAvailableFields.length > 0) {
+    return `SUGGEST: I couldn't find a "${fieldName}" field. Available fields: ${uniqueAvailableFields.join(", ")}.`;
   }
+
   return `SUGGEST: I couldn't find any form fields on this page.`;
 }
 
@@ -1002,7 +1052,7 @@ export function fillFormField(fieldName: string, value: string): string {
  * Set value on an input element with proper event dispatching
  */
 function setInputValue(
-  input: HTMLInputElement | HTMLTextAreaElement,
+  input: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
   value: string,
   fieldLabel: string
 ): string {
@@ -1019,10 +1069,15 @@ function setInputValue(
   const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(
     window.HTMLTextAreaElement.prototype, "value"
   )?.set;
+  const nativeSelectValueSetter = Object.getOwnPropertyDescriptor(
+    window.HTMLSelectElement.prototype, "value"
+  )?.set;
 
   if (input.tagName === "TEXTAREA" && nativeTextAreaValueSetter) {
     nativeTextAreaValueSetter.call(input, value);
-  } else if (nativeInputValueSetter) {
+  } else if (input.tagName === "SELECT" && nativeSelectValueSetter) {
+    nativeSelectValueSetter.call(input, value);
+  } else if (input.tagName === "INPUT" && nativeInputValueSetter) {
     nativeInputValueSetter.call(input, value);
   } else {
     input.value = value;

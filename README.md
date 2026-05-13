@@ -178,7 +178,7 @@ VoicePilot/
 - **Node.js** 18+ and **npm** 9+
 - **Google Chrome** (or any Chromium-based browser)
 - **API Keys** (at least one):
-  - [OpenAI API Key](https://platform.openai.com/api-keys) — *required for AI chat*
+  - [OpenAI / OpenRouter API Key](https://platform.openai.com/api-keys) — *required for AI chat (OpenRouter recommended for broader model access)*
   - [ElevenLabs API Key](https://elevenlabs.io/) — *optional, for premium voice*
   - [Firecrawl API Key](https://firecrawl.dev/) — *optional, for deep page scraping*
 
@@ -210,7 +210,7 @@ npm run dev
 ### Configuration
 
 1. Click the **VoicePilot icon** in the Chrome toolbar to open Settings
-2. Enter your **OpenAI API Key** (required)
+2. Enter your **OpenAI or OpenRouter API Key** (required)
 3. Optionally enter your **ElevenLabs API Key** for premium voice
 4. Optionally enter your **Firecrawl API Key** for deep page scraping
 5. Click **Save Settings**
@@ -249,6 +249,8 @@ npm run dev
 | *"Scroll down"* | Scrolls down by ~70% of viewport |
 | *"Scroll to top"* | Scrolls to the top of the page |
 | *"Go back"* | Navigates to the previous page |
+| *"Go forward"* | Navigates to the next page |
+| *"Go home"* | Navigates to the homepage |
 
 #### 🖱️ Interaction Commands
 | Command | What It Does |
@@ -256,6 +258,26 @@ npm run dev
 | *"Click Get Started"* | Finds and clicks the "Get Started" button |
 | *"Press Sign Up"* | Clicks the sign-up button |
 | *"Click Contact Sales"* | Clicks the "Contact Sales" element |
+
+#### 📝 Form Filling & Input Commands
+| Command | What It Does |
+|---------|-------------|
+| *"Fill the email field with [email]"* | Finds the email field and types the value |
+| *"Type [text]"* | Types or dictates text into the currently focused field |
+| *"Type [text] in the [field]"* | Finds a specific field and types text into it |
+| *"Submit form"* | Submits the current form or presses enter |
+
+#### 🔍 Search & Media Commands
+| Command | What It Does |
+|---------|-------------|
+| *"Search for [query]"* | Finds the search bar and enters your query |
+| *"Play video"* | Finds and plays media on the page |
+
+#### 💬 Messaging Commands
+| Command | What It Does |
+|---------|-------------|
+| *"Send message saying [text]"* | Types and sends a message in a chat interface |
+| *"Tell them [text]"* | Types and sends a message |
 
 #### 💬 Conversational Follow-ups
 VoicePilot remembers context, so you can ask follow-up questions:
@@ -335,7 +357,7 @@ For understanding intents, the page context is injected into GPT-4o's system pro
 
 | Setting | Description | Required |
 |---------|------------|----------|
-| **OpenAI API Key** | Powers AI understanding and conversation | ✅ Yes |
+| **OpenAI / OpenRouter API Key** | Powers AI understanding and conversation | ✅ Yes |
 | **ElevenLabs API Key** | Premium natural voice synthesis | ❌ Optional |
 | **Firecrawl API Key** | Deep page scraping for complex sites | ❌ Optional |
 | **Cloudflare Proxy URL** | Route API calls through a proxy for security | ❌ Optional |

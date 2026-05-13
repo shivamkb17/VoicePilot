@@ -22,17 +22,25 @@
         <p class="section-desc">Enter your API keys below. They are stored locally and never sent to third parties.</p>
 
         <div class="field">
-          <label for="openai-key">OpenAI API Key</label>
-          <input type="password" id="openai-key" placeholder="sk-..." />
+          <label for="llm-provider">LLM Provider</label>
+          <select id="llm-provider">
+            <option value="openrouter">OpenRouter</option>
+            <option value="openai">OpenAI</option>
+          </select>
         </div>
 
         <div class="field">
-          <label for="elevenlabs-key">ElevenLabs API Key</label>
+          <label for="openai-key" id="llm-key-label">OpenRouter API Key <a href="https://openrouter.ai/workspaces/default/keys" target="_blank" rel="noopener noreferrer" class="api-link" id="llm-key-link">Get API Key</a></label>
+          <input type="password" id="openai-key" placeholder="sk-or-v1-..." />
+        </div>
+
+        <div class="field">
+          <label for="elevenlabs-key">ElevenLabs API Key <a href="https://elevenlabs.io/app/developers/api-keys" target="_blank" rel="noopener noreferrer" class="api-link">Get API Key</a></label>
           <input type="password" id="elevenlabs-key" placeholder="Your ElevenLabs key" />
         </div>
 
         <div class="field">
-          <label for="firecrawl-key">Firecrawl API Key</label>
+          <label for="firecrawl-key">Firecrawl API Key <a href="https://www.firecrawl.dev/app" target="_blank" rel="noopener noreferrer" class="api-link">Get API Key</a></label>
           <input type="password" id="firecrawl-key" placeholder="fc-..." />
         </div>
       </section>
