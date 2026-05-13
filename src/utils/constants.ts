@@ -84,9 +84,9 @@ export const DEFAULTS = {
   SUBTITLES_ENABLED: true,
 
   // Default API keys for development/testing
-  OPENAI_KEY: "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",
-  ELEVENLABS_KEY: "sk_5b9b159846ae86a30b6ce38cadea604e9240517f78ffef2d",
-  FIRECRAWL_KEY: "fc-5c619b0e50944d8e8cd364494ba39e27",
+  OPENAI_KEY: "",
+  ELEVENLABS_KEY: "",
+  FIRECRAWL_KEY: "",
 } as const;
 
 /** Intent types */
