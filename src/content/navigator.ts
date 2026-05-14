@@ -755,15 +755,26 @@ export function unlockPageMedia(): string {
 // ── Type Text (Dictation into focused field) ──
 
 /**
+ * Wait one animation frame — lets frameworks (React/Vue) finish re-rendering
+ * after focus() before we try to set the value.
+ */
+function waitForFrame(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+/**
  * Type text into the currently focused input field, or the first visible one.
  * This is the "dictation mode" — user speaks and text goes into whatever field is active.
+ *
+ * Returns a Promise because when the target element wasn't previously focused,
+ * we need to wait a frame after focus() for frameworks to settle before typing.
  */
-export function typeTextIntoFocused(text: string): string {
+export async function typeTextIntoFocused(text: string): Promise<string> {
   if (!text || text.trim().length === 0) {
     return "SUGGEST: What would you like me to type?";
   }
 
-  // Strategy 1: Use the currently focused element
+  // Strategy 1: Use the currently focused element (already focused — type immediately)
   const activeEl = document.activeElement;
   if (activeEl && isEditableElement(activeEl)) {
     return typeIntoElement(activeEl as HTMLElement, text);
@@ -771,19 +782,35 @@ export function typeTextIntoFocused(text: string): string {
 
   // Strategy 2: Use the exact last focused input we tracked before the orb was clicked
   if (lastFocusedInput && document.contains(lastFocusedInput)) {
+    lastFocusedInput.focus();
     return typeIntoElement(lastFocusedInput, text);
   }
 
   // Strategy 3: Find the first visible input (fallback)
-  // Look for inputs/textareas that are visible and could be the target
+  // This is the path that triggers on the FIRST "type X" command when no field was focused.
+  // We must focus the element, wait for the framework to process the focus event
+  // (React/Vue may re-render/re-mount the component), then re-resolve the live element.
   const editables = document.querySelectorAll<HTMLElement>(
     'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, [contenteditable]'
   );
 
-  // Find the first visible one (most likely the one user wants to type in)
   for (const el of editables) {
     const rect = el.getBoundingClientRect();
     if (rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.top < window.innerHeight) {
+      // Focus the found element
+      el.focus();
+
+      // Wait one frame for framework re-renders to complete
+      await waitForFrame();
+
+      // Re-resolve: after the frame, the framework may have replaced the DOM node.
+      // document.activeElement now points to the live (possibly re-mounted) element.
+      const resolvedEl = document.activeElement as HTMLElement;
+      if (resolvedEl && isEditableElement(resolvedEl)) {
+        return typeIntoElement(resolvedEl, text);
+      }
+
+      // If activeElement didn't stick (rare), fall back to the original reference
       return typeIntoElement(el, text);
     }
   }
@@ -802,7 +829,10 @@ function isEditableElement(el: Element): boolean {
 }
 
 function typeIntoElement(el: HTMLElement, text: string): string {
-  el.focus();
+  // Ensure focus (may already be focused from caller)
+  if (document.activeElement !== el) {
+    el.focus();
+  }
 
   if (el.isContentEditable) {
     // For rich text editors (Draft.js, ProseMirror, Lexical), we must use execCommand

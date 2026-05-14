@@ -196,9 +196,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     }
 
     case MSG.TYPE_TEXT: {
-      const result = typeTextIntoFocused(message.text || "");
-      sendResponse({ result });
-      return false;
+      typeTextIntoFocused(message.text || "").then((result) => {
+        sendResponse({ result });
+      });
+      return true; // Async — keep message port open
     }
 
     case MSG.UPDATE_STATE: {
