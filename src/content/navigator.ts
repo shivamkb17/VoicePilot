@@ -112,12 +112,15 @@ function similarity(a: string, b: string): number {
   // Contains match (either direction)
   if (al.includes(bl) || bl.includes(al)) return 0.85;
 
-  // Word overlap
-  const aWords = al.split(/\s+/);
-  const bWords = bl.split(/\s+/);
+  // Word overlap — critical for blog title matching where speech recognition
+  // may slightly mangle words (e.g. "getting started" vs "getting started with react")
+  const aWords = al.split(/\s+/).filter(w => w.length > 1);
+  const bWords = bl.split(/\s+/).filter(w => w.length > 1);
   const commonWords = aWords.filter((w) => bWords.some((bw) => bw.includes(w) || w.includes(bw)));
   if (commonWords.length > 0) {
     const wordScore = commonWords.length / Math.max(aWords.length, bWords.length);
+    // For multi-word phrases (like blog titles), a high word overlap is a strong signal
+    if (commonWords.length >= 2 && wordScore >= 0.4) return 0.65 + wordScore * 0.25;
     if (wordScore >= 0.5) return 0.6 + wordScore * 0.2;
   }
 
@@ -158,7 +161,12 @@ function findBestMatch(
     .slice(0, 5)
     .map((s) => s.text);
 
-  return { match: bestScore >= 0.45 ? bestMatch : null, score: bestScore, closeCandidates };
+  // Use a slightly lower threshold for multi-word targets (e.g. blog titles)
+  // since speech recognition often introduces minor variations
+  const targetWords = target.trim().split(/\s+/).length;
+  const threshold = targetWords >= 3 ? 0.40 : 0.45;
+
+  return { match: bestScore >= threshold ? bestMatch : null, score: bestScore, closeCandidates };
 }
 
 /**
@@ -180,13 +188,20 @@ export function navigateToSection(target: string): string {
 
   // ── Build candidate list from all navigable elements ──
   const candidates: { text: string; element: Element }[] = [];
+  const seenTexts = new Set<string>();
+
+  const addCandidate = (text: string, element: Element) => {
+    const key = text.toLowerCase().trim();
+    if (key.length > 1 && !seenTexts.has(key)) {
+      seenTexts.add(key);
+      candidates.push({ text: text.trim(), element });
+    }
+  };
 
   // Headings
   document.querySelectorAll("h1, h2, h3, h4, h5").forEach((el) => {
     const text = el.textContent?.trim();
-    if (text && text.length > 1) {
-      candidates.push({ text, element: el });
-    }
+    if (text) addCandidate(text, el);
   });
 
   // Sections with headings
@@ -195,16 +210,36 @@ export function navigateToSection(target: string): string {
     const text = heading?.textContent?.trim() ||
       el.getAttribute("aria-label") ||
       el.id?.replace(/[-_]/g, " ");
-    if (text && text.length > 1) {
-      candidates.push({ text, element: el });
+    if (text) addCandidate(text, el);
+  });
+
+  // ── Blog / Article card links ──
+  // Blog listing pages often wrap entire cards in <a> tags. The full textContent
+  // includes title + excerpt + date + author, so it won't match a spoken title.
+  // Instead, extract the heading *inside* the link as a separate candidate.
+  document.querySelectorAll("a").forEach((el) => {
+    const innerHeading = el.querySelector("h1, h2, h3, h4, h5");
+    if (innerHeading) {
+      const headingText = innerHeading.textContent?.trim();
+      // Use the link (<a>) as the element so clicking navigates to the blog post
+      if (headingText && headingText.length > 1) {
+        addCandidate(headingText, el);
+      }
+    }
+
+    // Also check for title/aria-label attributes on links (common in card UIs)
+    const titleAttr = el.getAttribute("title")?.trim();
+    if (titleAttr && titleAttr.length > 1) {
+      addCandidate(titleAttr, el);
     }
   });
 
   // Interactive elements (links, buttons, etc)
   document.querySelectorAll("a, button, [role='button']").forEach((el) => {
     const text = el.textContent?.trim() || el.getAttribute("aria-label")?.trim() || "";
-    if (text.length > 1 && text.length < 60) {
-      candidates.push({ text, element: el });
+    // Allow longer text for links (blog titles can be long) but cap at 120
+    if (text.length > 1 && text.length < 120) {
+      addCandidate(text, el);
     }
   });
 
