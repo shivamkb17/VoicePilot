@@ -58,6 +58,9 @@ export const MSG = {
   // Settings
   GET_SETTINGS: "voicepilot:get_settings",
   SAVE_SETTINGS: "voicepilot:save_settings",
+
+  // Mic persistence
+  CHECK_MIC_STATE: "voicepilot:check_mic_state",
 } as const;
 
 /** Overlay states */

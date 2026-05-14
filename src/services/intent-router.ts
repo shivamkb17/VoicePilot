@@ -27,10 +27,16 @@ export function detectLocalIntent(text: string): Intent | null {
   }
 
   // Navigation - go back / forward
-  if (matchesAny(lower, ["go back", "back", "previous page", "go to previous"])) {
+  // Using exact regex to prevent false positives like "back to agents" or "forward email"
+  const backRegex = /^(?:please\s+|can you\s+|could you\s+|just\s+)?(?:go\s+|navigate\s+)?back$/i;
+  const previousRegex = /^(?:please\s+|can you\s+|could you\s+|just\s+)?(?:go\s+(?:to\s+)?)?previous(?:\s+page)?$/i;
+  if (backRegex.test(lower) || previousRegex.test(lower)) {
     return { type: "go_back", rawText: text };
   }
-  if (matchesAny(lower, ["go forward", "forward", "next page"])) {
+
+  const forwardRegex = /^(?:please\s+|can you\s+|could you\s+|just\s+)?(?:go\s+|navigate\s+)?forward$/i;
+  const nextRegex = /^(?:please\s+|can you\s+|could you\s+|just\s+)?(?:go\s+(?:to\s+)?)?next(?:\s+page)?$/i;
+  if (forwardRegex.test(lower) || nextRegex.test(lower)) {
     return { type: "go_forward", rawText: text };
   }
 

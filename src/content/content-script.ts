@@ -279,6 +279,18 @@ window.addEventListener("message", (event) => {
     return;
   }
 
+  if (event.data.type === "voicepilot:check_mic_state") {
+    chrome.runtime.sendMessage({ type: MSG.CHECK_MIC_STATE }, (response) => {
+      if (response?.isActive) {
+        overlayIframe?.contentWindow?.postMessage(
+          { type: "voicepilot:mic_restored" },
+          "*"
+        );
+      }
+    });
+    return;
+  }
+
   // Forward everything else to background service worker
   chrome.runtime.sendMessage(event.data);
 });

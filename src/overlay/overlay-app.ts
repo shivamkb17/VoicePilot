@@ -39,6 +39,13 @@ function init() {
 
   console.log("[VoicePilot] Overlay initialized (UI; mic handled offscreen).");
   setState("idle");
+
+  // Check if mic is already active (e.g. after page reload)
+  try {
+    window.parent.postMessage({ type: "voicepilot:check_mic_state" }, "*");
+  } catch {
+    /* ignore */
+  }
 }
 
 // ── Notify Parent to Resize ────────────────
@@ -354,6 +361,14 @@ function stopWaveformAnimation() {
 
 function handleParentMessage(event: MessageEvent) {
   if (!event.data?.type?.startsWith("voicepilot:")) return;
+
+  if (event.data.type === "voicepilot:mic_restored") {
+    isMicActive = true;
+    setState("listening");
+    requestResize(true);
+    scheduleTranscriptHide(5000);
+    return;
+  }
 
   if (event.data.type === "voicepilot:speech_outcome") {
     void handleSpeechOutcome({

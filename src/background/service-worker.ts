@@ -239,6 +239,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
       return true;
 
+    case MSG.CHECK_MIC_STATE:
+      sendResponse({ isActive: recordingTabId === sender.tab?.id });
+      return true;
+
     default:
       return false;
   }

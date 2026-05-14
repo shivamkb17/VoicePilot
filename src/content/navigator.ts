@@ -200,10 +200,10 @@ export function navigateToSection(target: string): string {
     }
   });
 
-  // Navigation links
-  document.querySelectorAll("nav a, header a, [role='navigation'] a").forEach((el) => {
-    const text = el.textContent?.trim();
-    if (text && text.length > 1 && text.length < 60) {
+  // Interactive elements (links, buttons, etc)
+  document.querySelectorAll("a, button, [role='button']").forEach((el) => {
+    const text = el.textContent?.trim() || el.getAttribute("aria-label")?.trim() || "";
+    if (text.length > 1 && text.length < 60) {
       candidates.push({ text, element: el });
     }
   });
@@ -214,25 +214,33 @@ export function navigateToSection(target: string): string {
   if (match && score >= 0.45) {
     // Good enough match — navigate
     const el = match.element;
+    const htmlEl = el as HTMLElement;
 
-    if (el.tagName === "A") {
-      const href = (el as HTMLAnchorElement).href;
-      if (href.includes("#")) {
-        const anchor = href.split("#")[1];
-        const anchorEl = document.getElementById(anchor);
-        if (anchorEl) {
-          anchorEl.scrollIntoView({ behavior: "smooth", block: "start" });
-          highlightElement(anchorEl);
-          return `Navigated to "${match.text}".`;
+    const isInteractive = el.tagName === "A" || el.tagName === "BUTTON" || el.getAttribute("role") === "button";
+
+    if (isInteractive) {
+      if (el.tagName === "A") {
+        const href = (el as HTMLAnchorElement).href;
+        if (href && href.includes("#") && !href.startsWith("javascript:")) {
+          const anchor = href.split("#")[1];
+          if (anchor) {
+            const anchorEl = document.getElementById(anchor);
+            if (anchorEl) {
+              anchorEl.scrollIntoView({ behavior: "smooth", block: "start" });
+              highlightElement(anchorEl);
+              return `Navigated to "${match.text}".`;
+            }
+          }
         }
       }
-      // Click the link
-      highlightElement(el);
-      setTimeout(() => (el as HTMLElement).click(), 500);
-      return `Clicking navigation link "${match.text}".`;
+      
+      // Click the interactive element
+      highlightElement(htmlEl);
+      setTimeout(() => htmlEl.click(), 500);
+      return `Clicking "${match.text}".`;
     }
 
-    // Scroll to the element
+    // Scroll to the element (headings, sections)
     el.scrollIntoView({ behavior: "smooth", block: "start" });
     highlightElement(el);
 
