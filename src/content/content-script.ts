@@ -14,7 +14,7 @@ import {
   goHome,
   pauseAllPageMedia,
   resumePageMedia,
-  playMedia,
+
   searchOnPage,
   lockPageMedia,
   unlockPageMedia,
@@ -157,11 +157,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       return false;
     }
 
-    case MSG.PLAY_MEDIA: {
-      const result = playMedia(message.target);
-      sendResponse({ result });
-      return false;
-    }
+
 
     case MSG.SEARCH: {
       const result = searchOnPage(message.query || "");

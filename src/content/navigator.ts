@@ -508,56 +508,7 @@ export function resumePageMedia(): string {
   return "No media to resume.";
 }
 
-/**
- * Find and play a media element matching the target.
- * Handles: audio elements, video elements, play buttons.
- */
-export function playMedia(target?: string): string {
-  // Strategy 1: Find audio/video elements
-  const mediaElements = document.querySelectorAll<HTMLMediaElement>("audio, video");
 
-  if (target) {
-    // Try to match by nearby text, title, or aria-label
-    for (const el of mediaElements) {
-      const context = (
-        el.getAttribute("title") ||
-        el.getAttribute("aria-label") ||
-        el.closest("[class]")?.textContent ||
-        ""
-      ).toLowerCase();
-
-      if (context.includes(target.toLowerCase())) {
-        el.play().catch(() => {});
-        highlightElement(el);
-        return `Playing "${target}".`;
-      }
-    }
-  }
-
-  // Strategy 2: Play the first paused media element
-  for (const el of mediaElements) {
-    if (el.paused && el.src) {
-      el.play().catch(() => {});
-      highlightElement(el);
-      const label = el.getAttribute("title") || "media";
-      return `Playing ${label}.`;
-    }
-  }
-
-  // Strategy 3: Find and click a play button
-  const playButtons = document.querySelectorAll<HTMLElement>(
-    'button[aria-label*="play" i], button[title*="play" i], [role="button"][aria-label*="play" i], .play-button, [class*="play-btn"], [class*="play_btn"]'
-  );
-
-  if (playButtons.length > 0) {
-    const btn = playButtons[0];
-    highlightElement(btn);
-    setTimeout(() => btn.click(), 400);
-    return "Clicking the play button.";
-  }
-
-  return "SUGGEST: I couldn't find any audio or video to play on this page.";
-}
 
 // ── Search ─────────────────────────────────
 

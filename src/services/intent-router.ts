@@ -139,20 +139,6 @@ export function detectLocalIntent(text: string): Intent | null {
     return { type: "explain_content", rawText: text };
   }
 
-  // Play media
-  if (matchesAny(lower, ["play music", "play audio", "play video", "play the music", "play the video", "play the audio", "play song", "resume music", "resume audio", "resume video"])) {
-    return { type: "play_media", rawText: text };
-  }
-  const playPatterns = [
-    /^play\s+(.+)/i,
-    /^(?:start|resume)\s+(?:playing\s+)?(.+)/i,
-  ];
-  for (const pattern of playPatterns) {
-    const match = lower.match(pattern);
-    if (match?.[1] && !match[1].includes("section") && !match[1].includes("page")) {
-      return { type: "play_media", target: match[1].trim(), rawText: text };
-    }
-  }
 
   // Type text into focused field (dictation mode)
   // Must be checked BEFORE fill_form so "type hello" → dictation,
@@ -269,7 +255,7 @@ Classify the user's speech into one of these intents:
 - go_back: User wants to go to previous page
 - go_forward: User wants to go forward
 - go_home: User wants to go to the homepage
-- play_media: User wants to play audio/video/music (extract target if specific)
+
 - search: User wants to search for something (extract the search query as target)
 - fill_form: User wants to fill a specific form field (extract "fieldname|value" as target)
 - type_text: User wants to type/dictate text into the current input field (extract text as target)

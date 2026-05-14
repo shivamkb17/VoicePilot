@@ -412,17 +412,6 @@ async function handleSpeechResultInternal(
         }
         break;
 
-      case "play_media":
-        try {
-          const playRes = await chrome.tabs.sendMessage(tabId, {
-            type: MSG.PLAY_MEDIA,
-            target: intent.target || "",
-          });
-          actionResult = playRes.result;
-        } catch (e) {
-          actionResult = "Could not play media.";
-        }
-        break;
 
       case "search":
         if (intent.target) {
@@ -522,7 +511,7 @@ async function handleSpeechResultInternal(
   // Step 5: For simple actions (without suggestions), return directly
   const simpleActions: IntentType[] = [
     "scroll", "go_back", "go_forward", "go_home",
-    "play_media", "search", "fill_form", "submit_form", "send_message", "type_text",
+    "search", "fill_form", "submit_form", "send_message", "type_text",
   ];
   if (simpleActions.includes(intent.type) && actionResult) {
     return {

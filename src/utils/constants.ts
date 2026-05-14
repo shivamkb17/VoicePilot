@@ -38,7 +38,7 @@ export const MSG = {
   // Media control
   PAUSE_MEDIA: "voicepilot:pause_media",
   RESUME_MEDIA: "voicepilot:resume_media",
-  PLAY_MEDIA: "voicepilot:play_media",
+
   LOCK_MEDIA: "voicepilot:lock_media",
   UNLOCK_MEDIA: "voicepilot:unlock_media",
 
@@ -105,7 +105,7 @@ export type IntentType =
   | "go_back"
   | "go_forward"
   | "go_home"
-  | "play_media"
+
   | "search"
   | "fill_form"
   | "submit_form"
