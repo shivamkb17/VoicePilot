@@ -623,14 +623,19 @@ export function searchOnPage(query: string): string {
 let originalPlay: typeof HTMLMediaElement.prototype.play | null = null;
 let isMediaLocked = false;
 let lockObserver: MutationObserver | null = null;
-let mutedElements: { el: HTMLMediaElement; wasMuted: boolean; prevVolume: number }[] = [];
+
+const forcePauseListener = (e: Event) => {
+  if (isMediaLocked && e.target instanceof HTMLMediaElement) {
+    e.target.pause();
+  }
+};
 
 /**
  * Lock ALL page media. Multi-layered approach:
  * 1. Pause all currently playing media
- * 2. Mute all audio/video elements (volume=0, muted=true)
- * 3. Monkey-patch HTMLMediaElement.play() to block new plays
- * 4. MutationObserver to catch dynamically created audio/video and mute them
+ * 2. Monkey-patch HTMLMediaElement.play() to reject new plays (mimics autoplay block)
+ * 3. Event listeners on capture phase for 'play' and 'playing' to forcefully pause.
+ * 4. MutationObserver to catch dynamically created or modified audio/video and pause them
  */
 export function lockPageMedia(): string {
   if (isMediaLocked) return "Media already locked.";
@@ -638,47 +643,36 @@ export function lockPageMedia(): string {
   // 1. Pause everything
   pauseAllPageMedia();
 
-  // 2. Mute ALL existing media elements
-  mutedElements = [];
-  document.querySelectorAll<HTMLMediaElement>("audio, video").forEach((el) => {
-    mutedElements.push({
-      el,
-      wasMuted: el.muted,
-      prevVolume: el.volume,
-    });
-    el.muted = true;
-    el.volume = 0;
-    el.pause();
-  });
-
-  // 3. Monkey-patch play()
+  // 2. Monkey-patch play()
   originalPlay = HTMLMediaElement.prototype.play;
   HTMLMediaElement.prototype.play = function (this: HTMLMediaElement) {
-    // Also force mute if somehow called
-    this.muted = true;
-    this.volume = 0;
-    this.pause();
-    return Promise.resolve();
+    return Promise.reject(
+      new DOMException("play() failed because the user didn't interact with the document first.", "NotAllowedError")
+    );
   };
 
-  // 4. MutationObserver — catch dynamically created audio/video
+  // 3. Event Listeners
+  document.addEventListener("play", forcePauseListener, true);
+  document.addEventListener("playing", forcePauseListener, true);
+
+  // 4. MutationObserver — catch dynamically created audio/video or attribute changes
   lockObserver = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
-      for (const node of mutation.addedNodes) {
-        if (node instanceof HTMLMediaElement) {
-          node.muted = true;
-          node.volume = 0;
-          node.pause();
-          mutedElements.push({ el: node, wasMuted: false, prevVolume: 1 });
+      if (mutation.type === "childList") {
+        for (const node of mutation.addedNodes) {
+          if (node instanceof HTMLMediaElement) {
+            node.pause();
+          }
+          // Also check children
+          if (node instanceof HTMLElement) {
+            node.querySelectorAll<HTMLMediaElement>("audio, video").forEach((el) => {
+              el.pause();
+            });
+          }
         }
-        // Also check children
-        if (node instanceof HTMLElement) {
-          node.querySelectorAll<HTMLMediaElement>("audio, video").forEach((el) => {
-            el.muted = true;
-            el.volume = 0;
-            el.pause();
-            mutedElements.push({ el, wasMuted: false, prevVolume: 1 });
-          });
+      } else if (mutation.type === "attributes") {
+        if (mutation.target instanceof HTMLMediaElement) {
+          mutation.target.pause();
         }
       }
     }
@@ -687,6 +681,8 @@ export function lockPageMedia(): string {
   lockObserver.observe(document.body, {
     childList: true,
     subtree: true,
+    attributes: true,
+    attributeFilter: ["src", "autoplay"]
   });
 
   isMediaLocked = true;
@@ -695,7 +691,7 @@ export function lockPageMedia(): string {
 }
 
 /**
- * Unlock page media — restore play(), volume, and remove observer.
+ * Unlock page media — restore play() and remove observer.
  */
 export function unlockPageMedia(): string {
   if (!isMediaLocked) return "Media not locked.";
@@ -706,14 +702,9 @@ export function unlockPageMedia(): string {
     originalPlay = null;
   }
 
-  // Restore mute/volume state
-  mutedElements.forEach(({ el, wasMuted, prevVolume }) => {
-    if (document.contains(el)) {
-      el.muted = wasMuted;
-      el.volume = prevVolume;
-    }
-  });
-  mutedElements = [];
+  // Remove event listeners
+  document.removeEventListener("play", forcePauseListener, true);
+  document.removeEventListener("playing", forcePauseListener, true);
 
   // Remove observer
   if (lockObserver) {
