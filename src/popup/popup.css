@@ -44,7 +44,7 @@ body {
   height: 28px;
   border-radius: 50%;
   /* background: linear-gradient(135deg, #6366f1, #a855f7); */
-  background-image: url('icons/icon128.webp');
+  background-image: url('icons/icon128.png');
   background-size: cover;
   background-position: center;
   box-shadow: 0 0 16px rgba(99, 102, 241, 0.4);
