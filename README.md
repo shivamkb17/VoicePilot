@@ -12,6 +12,10 @@
 > Important for release builds: VoicePilot is designed for a bring-your-own-key model. End users must enter their own provider API keys in extension settings.
 
 <p align="center">
+  <a href="https://voice-pilot.static2.website/"><strong>voice-pilot.static2.website</strong></a> — static landing page (install guide &amp; privacy)
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/Manifest-V3-blueviolet?style=flat-square" alt="Manifest V3" />
   <img src="https://img.shields.io/badge/TypeScript-5.6-blue?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/Vite-6.0-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite" />
@@ -162,12 +166,34 @@ VoicePilot/
 │   ├── icons/                       # Extension icons (16/32/48/128px)
 │   └── public/                      # Static assets copied to dist/
 │
+├── landing-page/                    # Static marketing site (not in extension build)
+│   ├── index.html
+│   ├── guide.html
+│   ├── privacy.html
+│   ├── style.css
+│   └── icons/                       # Logo used by the landing page
+│
 ├── dist/                            # Built extension (load this in Chrome)
 ├── package.json
 ├── tsconfig.json
 ├── vite.config.ts
 └── README.md
 ```
+
+---
+
+## 🌐 Landing page (static website)
+
+**Live site:** [https://voice-pilot.static2.website/](https://voice-pilot.static2.website/)
+
+This is a separate static HTML/CSS site under `landing-page/`. It is not bundled into the Chrome extension and does not use the Vite build.
+
+### How to update or host it
+
+1. **Edit** files in `landing-page/` (`index.html`, `guide.html`, `privacy.html`, `style.css`, assets under `icons/`). Keep **relative** URLs (for example `style.css`, `icons/icon128.png`) so the folder can be uploaded unchanged.
+2. **Deploy** by publishing the **contents** of `landing-page/` to any static host (S3/CloudFront, Netlify, GitHub Pages, etc.). The server should serve `index.html` as the default document at the site root.
+3. **Public URL / custom domain** is configured at your **DNS or hosting provider** (for example assigning the subdomain `voice-pilot` on `static2.website` to that static site). This repository only holds the files; it does not configure DNS. After deployment, share the HTTPS base URL you configured.
+4. **Local preview:** open `landing-page/index.html` in a browser, or run a static file server from that directory, for example `npx serve landing-page`.
 
 ---
 
