@@ -2,6 +2,12 @@
   "manifest_version": 3,
   "name": "VoicePilot",
   "version": "1.1.1",
+  "icons": {
+    "16": "icons/icon16.webp",
+    "32": "icons/icon32.webp",
+    "48": "icons/icon48.webp",
+    "128": "icons/icon128.webp"
+  },
   "description": "A conversational accessibility layer for the internet — browse, understand, and navigate websites completely through voice.",
   "permissions": [
     "activeTab",
@@ -32,17 +38,11 @@
     "default_popup": "popup/popup.html",
     "default_title": "VoicePilot Settings",
     "default_icon": {
-      "16": "icons/icon16.png",
-      "32": "icons/icon32.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
+      "16": "icons/icon16.webp",
+      "32": "icons/icon32.webp",
+      "48": "icons/icon48.webp",
+      "128": "icons/icon128.webp"
     }
-  },
-  "icons": {
-    "16": "icons/icon16.png",
-    "32": "icons/icon32.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
   },
   "web_accessible_resources": [
     {

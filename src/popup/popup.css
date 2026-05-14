@@ -4,7 +4,11 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
 
 body {
   width: 360px;
@@ -26,7 +30,7 @@ body {
   justify-content: space-between;
   margin-bottom: 20px;
   padding-bottom: 16px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .logo {
@@ -39,8 +43,11 @@ body {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #6366f1, #a855f7);
-  box-shadow: 0 0 16px rgba(99,102,241,0.4);
+  /* background: linear-gradient(135deg, #6366f1, #a855f7); */
+  background-image: url('icons/icon128.webp');
+  background-size: cover;
+  background-position: center;
+  box-shadow: 0 0 16px rgba(99, 102, 241, 0.4);
 }
 
 .logo h1 {
@@ -122,8 +129,8 @@ body {
   font-size: 13px;
   font-family: inherit;
   color: #e2e8f0;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
   outline: none;
   transition: all 0.2s ease;
@@ -136,9 +143,9 @@ body {
 
 .field input:focus,
 .field select:focus {
-  border-color: rgba(99,102,241,0.5);
-  box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
-  background: rgba(255,255,255,0.06);
+  border-color: rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .field input::placeholder {
@@ -160,12 +167,14 @@ body {
   cursor: pointer;
 }
 
-.toggle input { display: none; }
+.toggle input {
+  display: none;
+}
 
 .toggle-slider {
   position: absolute;
   inset: 0;
-  background: rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 11px;
   transition: all 0.3s ease;
 }
@@ -182,11 +191,11 @@ body {
   transition: all 0.3s ease;
 }
 
-.toggle input:checked + .toggle-slider {
+.toggle input:checked+.toggle-slider {
   background: linear-gradient(135deg, #6366f1, #a855f7);
 }
 
-.toggle input:checked + .toggle-slider::after {
+.toggle input:checked+.toggle-slider::after {
   transform: translateX(18px);
 }
 
@@ -204,12 +213,12 @@ body {
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 16px rgba(99,102,241,0.3);
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
 }
 
 .save-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(99,102,241,0.4);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
 }
 
 .save-btn:active {
