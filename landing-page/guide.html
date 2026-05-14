@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How to Use - VoicePilot</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Navigation -->
+        <nav class="navbar">
+            <a href="index.html" class="logo">
+                <div class="logo-orb" role="img" aria-label="VoicePilot"></div>
+                <span class="logo-text">VoicePilot</span>
+            </a>
+            <div class="nav-links">
+                <a href="guide.html">How to Use</a>
+                <a href="privacy.html">Privacy Policy</a>
+                <a href="https://github.com/shivamkb17/voicepilot" target="_blank">GitHub</a>
+            </div>
+        </nav>
+
+        <main class="content-page">
+            <header style="text-align: center; margin-bottom: 40px; border-bottom: 1px solid var(--surface-border); padding-bottom: 30px;">
+                <h1>How to Use VoicePilot</h1>
+                <div style="color: #94a3b8; font-size: 1.1rem;">A comprehensive guide to hands-free web browsing.</div>
+                
+                <div style="margin-top: 20px; display: inline-flex; align-items: center; gap: 10px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); padding: 10px 20px; border-radius: 30px; font-size: 0.95rem; color: #c4b5fd;">
+                    🚀 <strong>#ElevenHacks</strong> — Build something you can use without ever touching a keyboard.
+                </div>
+            </header>
+
+            <section>
+                <h2>1. Installation</h2>
+                <p>Since VoicePilot is a developer build, you'll need to load it manually into Google Chrome (or any Chromium-based browser):</p>
+                <div class="step" style="margin-top: 20px;">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <p><a href="https://github.com/shivamkb17/VoicePilot/releases/download/1.0.0/voice-pilot.zip">Download the extension</a> and <strong>unzip/extract</strong> the downloaded <code>voice-pilot.zip</code> file to a folder on your computer.</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <p>Open Chrome and navigate to <code>chrome://extensions/</code>.</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <p>Enable <strong>Developer mode</strong> (toggle in the top-right corner).</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <p>Click <strong>"Load unpacked"</strong> and select the <strong>unzipped folder</strong> from your computer.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section>
+                <h2>2. Configuration</h2>
+                <p>VoicePilot requires API keys to function. It uses a "bring-your-own-key" model so you only pay for what you use directly to the providers.</p>
+                <ul>
+                    <li><strong>OpenAI / OpenRouter API Key (Required):</strong> Used to analyze page context and understand your commands. OpenRouter is recommended for broader model access.</li>
+                    <li><strong>ElevenLabs API Key (Recommended):</strong> Used to generate state-of-the-art, ultra-realistic voice responses. If not provided, it falls back to your browser's default TTS.</li>
+                </ul>
+                <p>Click the VoicePilot icon in your Chrome toolbar, enter your keys, and click <strong>Save Settings</strong>.</p>
+            </section>
+
+            <section>
+                <h2>3. The Voice Orb Interface</h2>
+                <p>Once installed, you will see a glowing orb in the bottom-right corner of every website. The orb has 5 animated states to let you know what it's doing:</p>
+                <ul>
+                    <li><strong>Idle:</strong> Subtle breathing glow. It's waiting for you to interact.</li>
+                    <li><strong>Listening:</strong> Pulsing rings. It is actively recording your voice.</li>
+                    <li><strong>Processing:</strong> Spinning hue-rotate gradient. It is thinking and querying the AI.</li>
+                    <li><strong>Speaking:</strong> Animated waveform bars. It is talking back to you.</li>
+                    <li><strong>Error:</strong> Red pulse. Something went wrong (e.g. invalid API key).</li>
+                </ul>
+            </section>
+
+            <section>
+                <h2>4. Navigating Without a Keyboard</h2>
+                <p>Click the orb and speak naturally to navigate the web. Here are some commands you can try:</p>
+                
+                <div class="highlight-box">
+                    <h3 style="margin-top: 0;">🧭 Navigation Commands</h3>
+                    <ul>
+                        <li><em>"Scroll down"</em> / <em>"Scroll to top"</em></li>
+                        <li><em>"Find pricing"</em> (Automatically scrolls to the pricing section)</li>
+                        <li><em>"Go to contact"</em></li>
+                        <li><em>"Go back"</em> / <em>"Go forward"</em></li>
+                    </ul>
+                </div>
+
+                <div class="highlight-box">
+                    <h3 style="margin-top: 0;">🖱️ Interaction Commands</h3>
+                    <ul>
+                        <li><em>"Click Get Started"</em> (Finds the button and clicks it)</li>
+                        <li><em>"Press Sign Up"</em></li>
+                        <li><em>"Click Contact Sales"</em></li>
+                    </ul>
+                </div>
+
+                <div class="highlight-box">
+                    <h3 style="margin-top: 0;">🧠 Page Understanding</h3>
+                    <ul>
+                        <li><em>"What is this website?"</em> (Summarizes the current page)</li>
+                        <li><em>"Describe this page"</em> (Reads the layout and content)</li>
+                        <li><em>"What does this company do?"</em></li>
+                    </ul>
+                </div>
+
+                <div class="highlight-box">
+                    <h3 style="margin-top: 0;">📝 Form Filling</h3>
+                    <ul>
+                        <li><em>"Type John Doe in the name field"</em></li>
+                        <li><em>"Fill the email field with example@email.com"</em></li>
+                        <li><em>"Submit form"</em></li>
+                    </ul>
+                </div>
+            </section>
+
+            <section>
+                <h2>5. Conversational Memory</h2>
+                <p>VoicePilot remembers the context of your conversation. You don't have to repeat yourself!</p>
+                <pre style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; border: 1px solid var(--surface-border); margin-bottom: 20px;">
+<strong>You:</strong> "Find pricing."
+<em>VoicePilot navigates to the pricing section.</em>
+
+<strong>You:</strong> "Which plan is best for startups?"
+<em>VoicePilot analyzes the pricing table and recommends a plan aloud.</em>
+
+<strong>You:</strong> "Compare it with the enterprise plan."
+<em>VoicePilot compares the two plans based on the page content.</em></pre>
+                
+                <p>The conversation history resets when you switch tabs, keeping your experience clean and focused on the active page.</p>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer>
+            <div style="margin-bottom: 20px;">
+                <div class="logo-orb" style="width: 24px; height: 24px; margin: 0 auto 10px;"></div>
+                <strong>VoicePilot</strong>
+            </div>
+            <p>
+                <a href="privacy.html">Privacy Policy</a> &nbsp; | &nbsp; 
+                <a href="https://github.com/shivamkb17/voicepilot">GitHub Repository</a>
+            </p>
+            <p style="margin-top: 10px;">&copy; 2026 VoicePilot. MIT License.</p>
+        </footer>
+    </div>
+</body>
+</html>
